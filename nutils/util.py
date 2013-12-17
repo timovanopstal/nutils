@@ -111,17 +111,19 @@ def withrepr( f ):
       return '%s(%s)' % ( f.__name__, self.args )
   return function_wrapper
 
-def profile( func ):
+def profile( func, mintime=0 ):
+  t0 = time.time()
   import cProfile, pstats
   frame = sys._getframe(1)
   frame.f_locals['__profile_func__'] = func
   prof = cProfile.Profile()
   stats = prof.runctx( '__profile_retval__ = __profile_func__()', frame.f_globals, frame.f_locals )
-  pstats.Stats( prof, stream=sys.stdout ).strip_dirs().sort_stats( 'time' ).print_stats()
+  if time.time()-t0>mintime:
+    pstats.Stats( prof, stream=sys.stdout ).strip_dirs().sort_stats( 'time' ).print_stats()
+    raw_input( 'press enter to continue' )
   retval = frame.f_locals['__profile_retval__']
   del frame.f_locals['__profile_func__']
   del frame.f_locals['__profile_retval__']
-  raw_input( 'press enter to continue' )
   return retval
 
 class Cache( object ):

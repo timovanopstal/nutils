@@ -516,7 +516,7 @@ def writevtu( name, topo, coords, pointdata={}, celldata={}, ascii=False, supere
 
     if pointdata:  
       keys, values = zip( *pointdata.items() )
-      arrays = topo.elem_eval( values, ischeme='vtk', separate=False )
+      arrays = topo.elem_eval( values, ischeme='vtk%e'%kwargs.get('sdv',0), separate=False )
       for key, array in zip( keys, arrays ):
         vtkfile.pointdataarray( key, array )
 

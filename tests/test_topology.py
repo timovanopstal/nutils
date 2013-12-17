@@ -4,6 +4,11 @@ from nutils import *
 import numpy, copy
 
 grid = numpy.linspace( 0., 1., 4 )
+def inputfile():
+  'Create approximate sphere: smallest closed subdivision surface with extraordinary points and only quad elements.'
+  f = open( 'sphere.sdv', 'w' )
+  f.write( 'Verts 26\n0. 0. -1.\n0. 0. 1.\n1. 0. 0.\n0. -1. 0.\n-1. 0. 0.\n0. 1. 0.\n0.75 0. -0.75\n0. 0.75 -0.75\n0.75 0.75 0.\n0. -0.75 -0.75\n0.75 -0.75 0.\n-0.75 0. -0.75\n-0.75 -0.75 0.\n-0.75 0.75 0.\n0.75 0. 0.75\n0. 0.75 0.75\n0. -0.75 0.75\n-0.75 0. 0.75\n0.555556 0.555556 -0.555556\n0.555556 -0.555556 -0.555556\n-0.555556 -0.555556 -0.555556\n-0.555556 0.555556 -0.555556\n0.555556 0.555556 0.555556\n0.555556 -0.555556 0.555556\n-0.555556 -0.555556 0.555556\n-0.555556 0.555556 0.555556\nRings 24 0\n4 3 18 8 5 7 0 6 2 20 9 19 10 11 21 13\n4 3 19 10 2 6 0 9 3 21 11 20 12 7 18 8\n4 3 20 12 3 9 0 11 4 18 7 21 13 6 19 10\n4 3 21 13 4 11 0 7 5 19 6 18 8 9 20 12\n4 3 22 8 2 14 1 15 5 24 17 25 13 16 23 10\n4 3 25 13 5 15 1 17 4 23 16 24 12 14 22 8\n4 3 24 12 4 17 1 16 3 22 14 23 10 15 25 13\n4 3 23 10 3 16 1 14 2 25 15 22 8 17 24 12\n4 3 18 7 0 6 2 8 5 23 14 22 15 10 19 9\n4 3 22 15 5 8 2 14 1 19 10 23 16 6 18 7\n4 3 23 16 1 14 2 10 3 18 6 19 9 8 22 15\n4 3 19 9 3 10 2 6 0 22 8 18 7 14 23 16\n4 3 19 6 0 9 3 10 2 24 16 23 14 12 20 11\n4 3 23 14 2 10 3 16 1 20 12 24 17 9 19 6\n4 3 24 17 1 16 3 12 4 19 9 20 11 10 23 14\n4 3 20 11 4 12 3 9 0 23 10 19 6 16 24 17\n4 3 20 9 0 11 4 12 3 25 17 24 16 13 21 7\n4 3 24 16 3 12 4 17 1 21 13 25 15 11 20 9\n4 3 25 15 1 17 4 13 5 20 11 21 7 12 24 16\n4 3 21 7 5 13 4 11 0 24 12 20 9 17 25 15\n4 3 22 14 1 15 5 8 2 21 7 18 6 13 25 17\n4 3 18 6 2 8 5 7 0 25 13 21 11 15 22 14\n4 3 21 11 0 7 5 13 4 22 15 25 17 8 18 6\n4 3 25 17 4 13 5 15 1 18 8 22 14 7 21 11\nFaceGroups 1\nGroupI 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23' )
+  f.close()
 
 class ConnectivityStructuredBase( object ):
   'Tests StructuredTopology.neighbor(), also handles periodicity.'
@@ -49,6 +54,48 @@ class TestConnectivityStructured( ConnectivityStructuredBase ):
 
 class TestConnectivityStructuredPeriodic( ConnectivityStructuredBase ):
   periodic = True
+
+class TestConnectivitySubdivision( object ):
+  'Tests neighbor() and orientation for product domain of blender input.'
+  def __init__( self ):
+    inputfile()
+    self.domain, self.coords = mesh.blender( 'sphere.sdv' )
+    self.ddomain = self.domain * self.domain
+
+  def orientations( self, visual=False ):
+    'Test the orientation of product elements.'
+    if not visual: raise NotImplementedError( 'Have only the visual inspection.' )
+
+    idx = lambda el: self.domain.elements.index(el)
+    def plotelem( fig, elem, style='.k:', verts=False ):
+      'style is ordered: t, c, l'
+      x, y, z = self.coords( elem, 'bezier2' ).T
+      fig.plot( x, y, style[:2] )
+      if verts:
+        ha, va = ('left', 'bottom') if verts==1 else ('right', 'top')
+        for ip, (px, py) in enumerate( zip( x, y ) ):
+          fig.text( px, py, '%i'%ip, color=style[1], ha=ha, va=va )
+        fig.text( numpy.mean(x), numpy.mean(y), 'elem%i'%verts, color=style[1],
+            ha='center', va='center')
+      for edge in elem.edges:
+        x, y, z = self.coords( edge, 'bezier9' ).T
+        fig.plot( x, y, style[1:] )
+    def plotgrid( fig ):
+      for elem in self.domain:
+        if self.coords( elem, 'gauss1' )[0,2] < 0:
+          continue # Skip bottom half of sphere
+        plotelem( fig, elem )
+
+    for elem in self.ddomain:
+      if self.coords( elem.elem1, 'gauss1' )[0,2] < 0 or \
+         self.coords( elem.elem2, 'gauss1' )[0,2] < 0:
+        continue # Skip bottom half of sphere
+      with plot.PyPlot( 'fig' ) as fig:
+        inp = (idx(elem.elem1),idx(elem.elem2)) + elem.orientation
+        fig.title( 'elem1:%i elem2:%i: %i/%i/%i'%inp )
+        plotgrid( fig )
+        plotelem( fig, elem.elem1, 'xr-', 1 )
+        plotelem( fig, elem.elem2, '+g-', 2 )
 
 class TestStructure2D( object ):
   'Test coordinate evaluation for StructuredTopology.'
@@ -306,9 +353,10 @@ class TestTopologyGlueing( object ):
 
 def visualinspect():
   'Visual inspection of StokesBEM test case.'
-  visual = TestTopologyGlueing()
-  # visual.test_2DNodeRelabelingCorrect()
-  visual.StokesBEM( visual=True )
+  # visual = TestTopologyGlueing()
+  # visual.StokesBEM( visual=True )
+  visual = TestConnectivitySubdivision()
+  visual.orientations( visual=True )
 
 util.run( visualinspect )
 

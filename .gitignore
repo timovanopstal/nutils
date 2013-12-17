@@ -27,6 +27,8 @@ pip-log.txt
 .coverage
 .tox
 nosetests.xml
+sphere.sdv
+tripod.sdv
 
 # Translations
 *.mo

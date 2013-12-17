@@ -1621,7 +1621,7 @@ class PolyLine( StdElem ):
           elems[-1] = elem_e
       if curvature:
         assert neumann==0, 'Curvature free not allowed in combindation with Neumann'
-        assert degree==2, 'Curvature free only allowed for quadratic splines'  
+        assert degree==2, 'Curvature free only allowed for quadratic splines'
         elem_0, elem_e = cls.spline_elems_curvature()
         elems[0] = elem_0
         elems[-1] = elem_e
@@ -1722,5 +1722,274 @@ class ExtractionWrapper( object ):
     'string representation'
 
     return '%s#%x:%s' % ( self.__class__.__name__, id(self), self.stdelem )
+
+class CatmullClarkElem( StdElem ):
+  '''subdivision surface element
+     implemented by Pieter Barendrecht August 2013.'''
+
+  basepoly = PolyLine([[ 1./6,  2./3,  1./6, 0.  ],
+                       [-1./2,  0.,    1./2, 0.  ],
+                       [ 1./2, -1.,    1./2, 0.  ],
+                       [-1./6,  1./2, -1./2, 1./6]])
+
+  basepolyprod = basepoly**2
+
+  @staticmethod
+  @core.cache
+  def X( n, etype ):
+    if etype == 1: # Interpolating corner
+      Q0 = [0,0,1,2,0,0,1,2,3,3,4,5,6,6,7,8]
+      X = numpy.zeros( (16, 9) )
+      for R in range(16):
+        X[ R,Q0[R] ] = 1
+      # Phantom points (9)
+      X[0,[0,1,3,4]] = 4,-2,-2,1
+      X[1,[0,3]] = 2,-1
+      X[2,[1,4]] = 2,-1
+      X[3,[2,5]] = 2,-1
+      X[4,[0,1]] = 2,-1
+      X[8,[3,4]] = 2,-1
+      X[12,[6,7]] = 2,-1
+
+    elif etype == 3: # Regular boundary
+      Q0 = [4,3,0,11,4,3,0,11,5,2,1,10,6,7,8,9]
+      X = numpy.zeros( (16, 12) )
+      for R in range(16):
+        X[ R,Q0[R] ] = 1;
+      # Phantom points (4)
+      X[0,[4,5]] = 2,-1
+      X[1,[3,2]] = 2,-1
+      X[2,[0,1]] = 2,-1
+      X[3,[11,10]] = 2,-1
+
+    elif etype >= 4: # Interior (both regular and extraordinary)
+      # These rows from Abar will be used
+      Q0 = [(1 if n==3 else 7), 6, 2*n+4, 2*n+12, 0, 5, 2*n+3, 2*n+11, 3, 4, 2*n+2, 2*n+10, 2*n+6, 2*n+5, 2*n+1, 2*n+9]
+      Q1 = [0, 5, 2*n+3, 2*n+11, 3, 4, 2*n+2, 2*n+10, 2*n+6, 2*n+5, 2*n+1, 2*n+9, 2*n+15, 2*n+14, 2*n+13, 2*n+8]
+      Q2 = [1, 0, 5, 2*n+3, 2, 3, 4, 2*n+2, 2*n+7, 2*n+6, 2*n+5, 2*n+1, 2*n+16, 2*n+15, 2*n+14, 2*n+13]
+      X = numpy.empty( [3, 16, 2*n+17] )
+      X0 = numpy.zeros( (16, 2*n+17) )
+      X1 = numpy.zeros( (16, 2*n+17) )
+      X2 = numpy.zeros( (16, 2*n+17) )
+      for R in range(16):
+        X0[ R, Q0[R] ] = 1;
+        X1[ R, Q1[R] ] = 1;
+        X2[ R, Q2[R] ] = 1;
+      X[0,:,:] = X0
+      X[1,:,:] = X1
+      X[2,:,:] = X2
+
+    return X
+
+  @staticmethod
+  @core.cache
+  def Abar( n, etype ):
+    'extended subdivision matrix'
+    assert etype >= 4, 'Extended subdivision matrix should not be required.'
+
+    # Matrix blocks
+    i1, i2, i3 = numpy.cumsum( [ 2*n+1, 7, 9 ] )
+    Abar = numpy.empty( [i3,i2] )
+    Abar[0:i1,i1:i2] = 0
+    S   = Abar[ 0:i1, 0:i1]
+    S11 = Abar[i1:i2, 0:i1]
+    S12 = Abar[i1:i2,i1:i2]
+    S21 = Abar[i2:i3, 0:i1]
+    S22 = Abar[i2:i3,i1:i2]
+
+    # Extraordinary coefficients
+    a = 1. - 7./(4.*n)
+    b = 3./(2.*n**2)
+    c = 1./(4.*n**2)
+    d = 3./8.
+    e = 1./16.
+    f = 1./4.
+
+    S[0,0] = a
+    S[0,1:] = [b, c]*n
+    S[1:,0] = [d, f]*n
+    S[1,1:4] = d, e, e
+    S[1,4:-2] = 0
+    S[1,-2:] = e, e
+    S[2,1:4] = f, f, f
+    S[2,4:] = 0
+    for i in range(3,2*n+1):
+      for j in range(1,2*n+1):
+        S[i,j] = S[i-2,-2] if j==1 else S[i-2,-1] if j==2 else S[i-2,j-2] # Circulant
+
+    # Regular coefficients
+    a = 9./16.
+    b = 3./32.
+    c = 1./64.
+
+    if n == 3:
+      S11[0] = c,0,0,b,a,b,0
+      S11[1] = e,0,0,e,d,d,0
+      S11[2] = b,c,0,c,b,a,b
+      S11[3] = e,e,0,0,0,d,d
+      S11[4] = e,0,0,d,d,e,0
+      S11[5] = b,c,b,a,b,c,0
+      S11[6] = e,e,d,d,0,0,0
+    else:
+      S11[0,:8] = c,0,0,b,a,b,0,0
+      S11[1,:8] = e,0,0,e,d,d,0,0
+      S11[2,:8] = b,0,0,c,b,a,b,c
+      S11[3,:8] = e,0,0,0,0,d,d,e
+      S11[4,:8] = e,0,0,d,d,e,0,0
+      S11[5,:8] = b,c,b,a,b,c,0,0
+      S11[6,:8] = e,e,d,d,0,0,0,0
+      S11[:,8:] = 0
+
+    S12[0] = c,b,c,0,b,c,0
+    S12[1] = 0,e,e,0,0,0,0
+    S12[2] = 0,c,b,c,0,0,0
+    S12[3] = 0,0,e,e,0,0,0
+    S12[4] = 0,0,0,0,e,e,0
+    S12[5] = 0,0,0,0,c,b,c
+    S12[6] = 0,0,0,0,0,e,e
+
+    S21[0,:7] = 0,0,0,0,f,0,0
+    S21[1,:7] = 0,0,0,0,d,e,0
+    S21[2,:7] = 0,0,0,0,f,f,0
+    S21[3,:7] = 0,0,0,0,e,d,e
+    S21[4,:7] = 0,0,0,0,0,f,f
+    S21[5,:7] = 0,0,0,e,d,0,0
+    S21[6,:7] = 0,0,0,f,f,0,0
+    S21[7,:7] = 0,0,e,d,e,0,0
+    S21[8,:7] = 0,0,f,f,0,0,0
+    if n != 3:
+      S21[:,7:] = 0
+
+    S22[0] = f,f,0,0,f,0,0
+    S22[1] = e,d,e,0,e,0,0
+    S22[2] = 0,f,f,0,0,0,0
+    S22[3] = 0,e,d,e,0,0,0
+    S22[4] = 0,0,f,f,0,0,0
+    S22[5] = e,e,0,0,d,e,0
+    S22[6] = 0,0,0,0,f,f,0
+    S22[7] = 0,0,0,0,e,d,e
+    S22[8] = 0,0,0,0,0,f,f
+    return Abar
+
+  @staticmethod
+  @core.cache
+  def LimitStencil( n, etype ):
+    'limit stencil'
+    assert etype >= 4, 'Limit stencil should not be required.'
+
+    # Multiplied by n with respect to the coefficients defined earlier
+    b = 3./(2.*n)
+    c = 1./(4.*n)
+    # cf. Lai & Cheng paper
+    Denom = 5. + 14.*b + 16.*c
+    Alpha = 5. / Denom
+    Beta = (12.*b + 8.*c) / (Denom*n)
+    Gamma = (2.*b + 8.*c) / (Denom*n)
+    return [Alpha] + [Beta, Gamma]*n + [0.]*7
+
+  def __init__( self, n, etype ):
+    'constructor'
+    self.valence = n
+    self.etype = etype
+
+  def eval_bsplines( self, s, t, grad, direction ):
+    'evaluate b-splines'
+    assert direction < grad+1
+    s_new, t_new = [numpy.asarray(c).reshape(-1,1) for c in s, t]
+    p = self.basepoly.eval( s_new, grad=grad-direction ).flatten()
+    q = self.basepoly.eval( t_new, grad=direction ).flatten() # flatten avoids creation of grad-axis
+    return (q[:,_] * p[_,:]).reshape(16)
+
+  @core.cache
+  def eval( self, points, grad=0 ):
+    'evaluate'
+    size = {1:9, 3:12}.get( self.etype, 2*self.valence+8 )
+    result = numpy.empty( [numpy.size(points,0), size] + [2]*grad )
+    X = self.X( self.valence, self.etype )
+
+    if self.etype > 3:
+      Abar = self.Abar( self.valence, self.etype )
+      A = Abar[:2*self.valence+8]
+      XAbar = (X[:,:,:,_]*Abar[_,_,:,:]).sum(2)
+      powersofA = {}
+      for p in range(numpy.size(points,0)):
+        u = points[p,0]
+        v = points[p,1]
+        m = max(u,v)
+
+        if m == 0.:
+          # Limitpoint!
+          # S = self.Vinv[0].sum() is equal to 1/Self.V[0,0]
+          # not necessary if first eigenvector is [1,1,...,1].T
+          if grad == 0:
+            # In the case V[0,0] != 1:
+            result[p,:] = self.LimitStencil( self.valence, self.etype )
+          else:
+            warnings.warn( 'Should not evaluate gradient in extraordinary point, may be unbounded.' )
+            result[:] = 0
+
+        else:
+          l = int( numpy.floor(-numpy.log2(m)) ) # l = level
+          Al = powersofA.setdefault( l, numpy.linalg.matrix_power(A, l) )
+          ubar = 2**l*u
+          vbar = 2**l*v
+          if vbar < .5:
+            k = 0
+            s = 2*ubar-1
+            t = 2*vbar
+          elif ubar > .5:
+            k = 1
+            s = 2*ubar-1
+            t = 2*vbar-1
+          else:
+            k = 2
+            s = 2*ubar
+            t = 2*vbar-1
+
+          if grad == 0:
+            temp = self.eval_bsplines(s,t,0,0)
+            result[p] = (temp[:,_,_] * XAbar[k][:,:,_] * Al[_,:,:]).sum(1).sum(0)
+          elif grad == 1:
+            # dat transf nodig is, is raar ----------------------------------------------------------------------
+            temp0 = numpy.concatenate( (self.eval_bsplines(s,t,grad,0)[:,_],
+                                        self.eval_bsplines(s,t,grad,1)[:,_]), axis=1 )
+            # pts = numpy.array( [s, t] )
+            # temp1 = self.basepolyprod.eval( pts, grad=grad )
+            # transf = numpy.zeros( 2*(16,) )
+            # for i in range(4): transf[0+4*i,0+i] = transf[1+4*i,4+i] = transf[2+4*i,8+i] = transf[3+4*i,12+i] = 1
+            # temp1 = (transf[:,:,_]*temp1[_,:,:]).sum(1)
+            #----------------------------------------------------------------------------------------------------
+            result[p] = 2**(l+1) * (temp0[:,_,_,:] * XAbar[k][:,:,_,_] * Al[_,:,:,_]).sum(1).sum(0)
+          elif grad == 2:
+            Y0 = self.eval_bsplines(s,t,grad,0)
+            Y1 = self.eval_bsplines(s,t,grad,1)
+            Y2 = self.eval_bsplines(s,t,grad,2)
+            temp = numpy.concatenate( [
+              numpy.concatenate( [Y0[:,_], Y1[:,_]], axis=1 )[:,:,_],
+              numpy.concatenate( [Y1[:,_], Y2[:,_]], axis=1 )[:,:,_]], axis=2 )
+            result[p] = 4**(l+1) * (temp[:,_,_,:,:] * XAbar[k][:,:,_,_,_] * Al[_,:,:,_,_]).sum(1).sum(0)
+
+    else: # etype in (1,3)
+      for p in range(numpy.size(points,0)):
+        u = points[p,0]
+        v = points[p,1]
+
+        # l=0 for the entire patch.
+        if grad == 0:
+          result[p] = (X[:,:] * self.eval_bsplines(u,v,grad,0)[:,_]).sum(0)
+        elif grad == 1:
+          temp = numpy.concatenate( (self.eval_bsplines(u,v,grad,0)[:,_],
+                                     self.eval_bsplines(u,v,grad,1)[:,_]), axis=1 ) # Same as for etype >= 4
+          result[p] = (X[:,:,_] * temp[:,_,:]).sum(0)
+        elif grad == 2:
+          Y0 = self.eval_bsplines(u,v,grad,0)
+          Y1 = self.eval_bsplines(u,v,grad,1)
+          Y2 = self.eval_bsplines(u,v,grad,2)
+          temp = numpy.concatenate( [
+            numpy.concatenate( [Y0[:,_], Y1[:,_]], axis=1 )[:,:,_],
+            numpy.concatenate( [Y1[:,_], Y2[:,_]], axis=1 )[:,:,_]], axis=2 ) # Same as for etype >=4
+          result[p] = (X[:,:,_,_] * temp[:,_,:,:]).sum(0)
+
+    return result
 
 # vim:shiftwidth=2:foldmethod=indent:foldnestmax=2
