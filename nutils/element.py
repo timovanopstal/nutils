@@ -1727,9 +1727,7 @@ class CatmullClarkElem( StdElem ):
   basepoly = PolyLine([[ 1./6,  2./3,  1./6, 0.  ],
                        [-1./2,  0.,    1./2, 0.  ],
                        [ 1./2, -1.,    1./2, 0.  ],
-                       [-1./6,  1./2, -1./2, 1./6]])
-
-  basepolyprod = basepoly**2
+                       [-1./6,  1./2, -1./2, 1./6]])**2
 
   @staticmethod
   @core.cache
@@ -1893,14 +1891,6 @@ class CatmullClarkElem( StdElem ):
     self.etype = etype
     return self
 
-  def eval_bsplines( self, s, t, grad, direction ):
-    'evaluate b-splines'
-    assert direction < grad+1
-    s_new, t_new = [numpy.asarray(c).reshape(-1,1) for c in s, t]
-    p = self.basepoly.eval( s_new, grad=grad-direction ).flatten()
-    q = self.basepoly.eval( t_new, grad=direction ).flatten() # flatten avoids creation of grad-axis
-    return (q[:,_] * p[_,:]).reshape(16)
-
   @core.cache
   def eval( self, points, grad=0 ):
     'evaluate'
@@ -1915,7 +1905,9 @@ class CatmullClarkElem( StdElem ):
       transf = lambda x, shift=0: (2*x-shift)[:,_]
 
       mvec = numpy.amax( numpy.asarray(points), axis=1 )
-      lvec = numpy.floor( -numpy.log2(mvec) ).astype( 'int64', copy=False ) # TODO: log2 throws RuntimeWarning if mvec contains 0.
+      with warnings.catch_warnings():
+        warnings.simplefilter('ignore',RuntimeWarning) # locally avert RuntimeWarning thrown by log2 if mvec contains a 0.
+        lvec = numpy.floor( -numpy.log2(mvec) ).astype( 'int64', copy=False )
       lvec[mvec==0.] = -1 # relabel inf, is lost by int conversion
       assert all( lvec>-2 ), 'Point outside standard elem (i.e. outside [0,1]**d)'
       for level in range( -1, max(lvec)+1 ):
@@ -1938,30 +1930,12 @@ class CatmullClarkElem( StdElem ):
           if not len(k_indices[0]): continue # No points to evaluate in this quadrant
           pts = numpy.concatenate( [transf( ubar[k_indices], not k==2 ),
                                     transf( vbar[k_indices], not k==0 )], axis=1 ) # o.k.
-          temp = self.basepolyprod.eval( pts, grad=grad )
+          temp = self.basepoly.eval( pts, grad=grad )
           lk_indices = l_indices[0][k_indices],
-          result[lk_indices] = 2**(grad*(level+1)) * numeric.dot( numeric.dot( XAbar[k], Al ).T, temp.swapaxes(0,1), axis=1 ).swapaxes(0,1)
+          result[lk_indices] = 2**(grad*(level+1)) * numeric.dot( numeric.dot( XAbar[k], Al ).T, temp.swapaxes(0,1) ).swapaxes(0,1)
 
     else: # etype in (1,3)
-      for p in range(numpy.size(points,0)):
-        u = points[p,0]
-        v = points[p,1]
-
-        # l=0 for the entire patch.
-        if grad == 0:
-          result[p] = (X[:,:] * self.eval_bsplines(u,v,grad,0)[:,_]).sum(0)
-        elif grad == 1:
-          temp = numpy.concatenate( (self.eval_bsplines(u,v,grad,0)[:,_],
-                                     self.eval_bsplines(u,v,grad,1)[:,_]), axis=1 ) # Same as for etype >= 4
-          result[p] = (X[:,:,_] * temp[:,_,:]).sum(0)
-        elif grad == 2:
-          Y0 = self.eval_bsplines(u,v,grad,0)
-          Y1 = self.eval_bsplines(u,v,grad,1)
-          Y2 = self.eval_bsplines(u,v,grad,2)
-          temp = numpy.concatenate( [
-            numpy.concatenate( [Y0[:,_], Y1[:,_]], axis=1 )[:,:,_],
-            numpy.concatenate( [Y1[:,_], Y2[:,_]], axis=1 )[:,:,_]], axis=2 ) # Same as for etype >=4
-          result[p] = (X[:,:,_,_] * temp[:,_,:,:]).sum(0)
+      result = numeric.dot( X.T, self.basepoly.eval( points, grad=grad ).swapaxes(0,1) ).swapaxes(0,1)
 
     return result
 
