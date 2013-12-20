@@ -1,5 +1,5 @@
 from . import log, util, numpy, core, numeric, function, _
-import warnings
+import warnings, time
 
 class TrimmedIScheme( object ):
   'integration scheme for truncated elements'
@@ -1764,9 +1764,10 @@ class CatmullClarkElem( StdElem ):
 
     elif etype >= 4: # Interior (both regular and extraordinary)
       # These rows from Abar will be used
-      Q0 = [(1 if n==3 else 7), 6, 2*n+4, 2*n+12, 0, 5, 2*n+3, 2*n+11, 3, 4, 2*n+2, 2*n+10, 2*n+6, 2*n+5, 2*n+1, 2*n+9]
-      Q1 = [0, 5, 2*n+3, 2*n+11, 3, 4, 2*n+2, 2*n+10, 2*n+6, 2*n+5, 2*n+1, 2*n+9, 2*n+15, 2*n+14, 2*n+13, 2*n+8]
-      Q2 = [1, 0, 5, 2*n+3, 2, 3, 4, 2*n+2, 2*n+7, 2*n+6, 2*n+5, 2*n+1, 2*n+16, 2*n+15, 2*n+14, 2*n+13]
+      Q00 = 1 if n==3 else 7
+      Q0 = [Q00, 0, 3,     2*n+6,  6, 5, 4,     2*n+5,  2*n+4, 2*n+3, 2*n+2, 2*n+1,  2*n+12, 2*n+11, 2*n+10, 2*n+9 ]
+      Q1 = [0,   3, 2*n+6, 2*n+15, 5, 4, 2*n+5, 2*n+14, 2*n+3, 2*n+2, 2*n+1, 2*n+13, 2*n+11, 2*n+10, 2*n+9,  2*n+8 ]
+      Q2 = [1,   2, 2*n+7, 2*n+16, 0, 3, 2*n+6, 2*n+15, 5,     4,     2*n+5, 2*n+14, 2*n+3,  2*n+2,  2*n+1,  2*n+13]
       X = numpy.empty( [3, 16, 2*n+17] )
       X0 = numpy.zeros( (16, 2*n+17) )
       X1 = numpy.zeros( (16, 2*n+17) )
@@ -1885,12 +1886,15 @@ class CatmullClarkElem( StdElem ):
     Alpha = 5. / Denom
     Beta = (12.*b + 8.*c) / (Denom*n)
     Gamma = (2.*b + 8.*c) / (Denom*n)
-    return [Alpha] + [Beta, Gamma]*n + [0.]*7
+    return numpy.array( [Alpha] + [Beta, Gamma]*n + [0.]*7 )
 
-  def __init__( self, n, etype ):
+  @core.cache
+  def __new__( cls, n, etype ):
     'constructor'
+    self = object.__new__( cls )
     self.valence = n
     self.etype = etype
+    return self
 
   def eval_bsplines( self, s, t, grad, direction ):
     'evaluate b-splines'
@@ -1910,64 +1914,36 @@ class CatmullClarkElem( StdElem ):
     if self.etype > 3:
       Abar = self.Abar( self.valence, self.etype )
       A = Abar[:2*self.valence+8]
-      XAbar = (X[:,:,:,_]*Abar[_,_,:,:]).sum(2)
-      powersofA = {}
-      for p in range(numpy.size(points,0)):
-        u = points[p,0]
-        v = points[p,1]
-        m = max(u,v)
+      XAbar = numeric.dot( X, Abar )
+      transf = lambda x, shift=0: (2*x-shift)[:,_]
 
-        if m == 0.:
-          # Limitpoint!
-          # S = self.Vinv[0].sum() is equal to 1/Self.V[0,0]
-          # not necessary if first eigenvector is [1,1,...,1].T
-          if grad == 0:
-            # In the case V[0,0] != 1:
-            result[p,:] = self.LimitStencil( self.valence, self.etype )
-          else:
-            warnings.warn( 'Should not evaluate gradient in extraordinary point, may be unbounded.' )
-            result[:] = 0
+      mvec = numpy.amax( numpy.asarray(points), axis=1 )
+      lvec = numpy.floor( -numpy.log2(mvec) ).astype( 'int64', copy=False ) # TODO: log2 throws RuntimeWarning if mvec contains 0.
+      lvec[mvec==0.] = -1 # relabel inf, is lost by int conversion
+      assert all( lvec>-2 ), 'Point outside standard elem (i.e. outside [0,1]**d)'
+      for level in range( -1, max(lvec)+1 ):
+        l_indices = numpy.where( lvec==level )
+        Al = numpy.dot( Al, A ) if level>0 else numpy.eye(len(A)) # At level 0, Al = Id
+        if not len(l_indices[0]): continue # No points to evaluate at this level
 
-        else:
-          l = int( numpy.floor(-numpy.log2(m)) ) # l = level
-          Al = powersofA.setdefault( l, numpy.linalg.matrix_power(A, l) )
-          ubar = 2**l*u
-          vbar = 2**l*v
-          if vbar < .5:
-            k = 0
-            s = 2*ubar-1
-            t = 2*vbar
-          elif ubar > .5:
-            k = 1
-            s = 2*ubar-1
-            t = 2*vbar-1
-          else:
-            k = 2
-            s = 2*ubar
-            t = 2*vbar-1
+        if level==-1: # Evaluation in extraordinary point (0,0)
+          if grad: warnings.warn( 'Should not evaluate gradient in extraordinary point, may be unbounded.' )
+          result[l_indices,:] = self.LimitStencil( self.valence, self.etype )[_,:] if grad == 0 else 0
+          continue
 
-          if grad == 0:
-            temp = self.eval_bsplines(s,t,0,0)
-            result[p] = (temp[:,_,_] * XAbar[k][:,:,_] * Al[_,:,:]).sum(1).sum(0)
-          elif grad == 1:
-            # dat transf nodig is, is raar ----------------------------------------------------------------------
-            temp0 = numpy.concatenate( (self.eval_bsplines(s,t,grad,0)[:,_],
-                                        self.eval_bsplines(s,t,grad,1)[:,_]), axis=1 )
-            # pts = numpy.array( [s, t] )
-            # temp1 = self.basepolyprod.eval( pts, grad=grad )
-            # transf = numpy.zeros( 2*(16,) )
-            # for i in range(4): transf[0+4*i,0+i] = transf[1+4*i,4+i] = transf[2+4*i,8+i] = transf[3+4*i,12+i] = 1
-            # temp1 = (transf[:,:,_]*temp1[_,:,:]).sum(1)
-            #----------------------------------------------------------------------------------------------------
-            result[p] = 2**(l+1) * (temp0[:,_,_,:] * XAbar[k][:,:,_,_] * Al[_,:,:,_]).sum(1).sum(0)
-          elif grad == 2:
-            Y0 = self.eval_bsplines(s,t,grad,0)
-            Y1 = self.eval_bsplines(s,t,grad,1)
-            Y2 = self.eval_bsplines(s,t,grad,2)
-            temp = numpy.concatenate( [
-              numpy.concatenate( [Y0[:,_], Y1[:,_]], axis=1 )[:,:,_],
-              numpy.concatenate( [Y1[:,_], Y2[:,_]], axis=1 )[:,:,_]], axis=2 )
-            result[p] = 4**(l+1) * (temp[:,_,_,:,:] * XAbar[k][:,:,_,_,_] * Al[_,:,:,_,_]).sum(1).sum(0)
+        ubar = 2**level*points[l_indices][:,0]
+        vbar = 2**level*points[l_indices][:,1]
+        # Evaluate points at 'level' for quadrant k in [0,1,2]
+        for k in range(3):
+          k_indices = numpy.where( vbar<.5 ) if k==0 else \
+                      numpy.where( ubar<.5 ) if k==2 else \
+                      numpy.where( numpy.logical_and( ubar>=.5, vbar>=.5 ) )
+          if not len(k_indices[0]): continue # No points to evaluate in this quadrant
+          pts = numpy.concatenate( [transf( ubar[k_indices], not k==2 ),
+                                    transf( vbar[k_indices], not k==0 )], axis=1 ) # o.k.
+          temp = self.basepolyprod.eval( pts, grad=grad )
+          lk_indices = l_indices[0][k_indices],
+          result[lk_indices] = 2**(grad*(level+1)) * numeric.dot( numeric.dot( XAbar[k], Al ).T, temp.swapaxes(0,1), axis=1 ).swapaxes(0,1)
 
     else: # etype in (1,3)
       for p in range(numpy.size(points,0)):

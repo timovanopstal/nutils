@@ -192,8 +192,7 @@ class TestShearFlow( object ):
     tracp = domain.projection( trac, onto=funcsp, geometry=coords, ischeme='gauss6', title='project exact sol' )
     err = l2norm(trach-tracp, 'err')/l2norm(numpy.ones(1), 'surf')
     if visual:
-      plot.writevtu( visual, domain.refine(2), coords, sdv=1.e-6,
-          pointdata={'trac0':trac, 'trach':trach} )
+      plot.writevtu( visual, domain.refine(2), coords, sdv=1.e-4 ) # , pointdata={'trac0':trac, 'trach':trach} )
       log.info( 'L2 err per unit surface area: %.2e' % err )
     assert err < tol, 'Traction computed in BEM example exceeds tolerance.'
 
