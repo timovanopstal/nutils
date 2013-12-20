@@ -1,4 +1,4 @@
-from . import topology, util, numpy, function, element, log, prop, numeric, _
+from . import topology, util, numpy, function, element, log, prop, numeric, debug, _
 from scipy import spatial # for def mesh; import cannot be postponed apparently
 import os, warnings
 
@@ -37,12 +37,12 @@ class BasePlot( object ):
   def __exit__( self, *exc_info ):
     'exit with block'
 
-    exc_type = exc_info[0]
+    exc_type, exc_value, exc_tb = exc_info
     if exc_type == KeyboardInterrupt:
       log.restore( self.oldlog )
       return False
     elif exc_type:
-      log.traceback( exc_info )
+      log.stack( repr(exc_value), debug.exception() )
       return False
     else:
       if self.names:
