@@ -1905,8 +1905,8 @@ class CatmullClarkElem( StdElem ):
       transf = lambda x, shift=0: (2*x-shift)[:,_]
 
       mvec = numpy.amax( numpy.asarray(points), axis=1 )
-      with warnings.catch_warnings():
-        warnings.simplefilter('ignore',RuntimeWarning) # locally avert RuntimeWarning thrown by log2 if mvec contains a 0.
+      with warnings.catch_warnings(): # locally ignore RuntimeWarning thrown by log2 if mvec contains a 0.
+        warnings.simplefilter( 'ignore', RuntimeWarning )
         lvec = numpy.floor( -numpy.log2(mvec) ).astype( 'int64', copy=False )
       lvec[mvec==0.] = -1 # relabel inf, is lost by int conversion
       assert all( lvec>-2 ), 'Point outside standard elem (i.e. outside [0,1]**d)'
@@ -1914,28 +1914,31 @@ class CatmullClarkElem( StdElem ):
         l_indices = numpy.where( lvec==level )
         Al = numpy.dot( Al, A ) if level>0 else numpy.eye(len(A)) # At level 0, Al = Id
         if not len(l_indices[0]): continue # No points to evaluate at this level
+        coeff = 2**(grad*(level+1))
 
         if level==-1: # Evaluation in extraordinary point (0,0)
-          if grad: warnings.warn( 'Should not evaluate gradient in extraordinary point, may be unbounded.' )
-          result[l_indices,:] = self.LimitStencil( self.valence, self.etype )[_,:] if grad == 0 else 0
+          if grad: raise ValueError( 'grad in extraordinary point unbounded.' )
+          result[l_indices,:] = self.LimitStencil( self.valence, self.etype )[_,:]
           continue
 
         ubar = 2**level*points[l_indices][:,0]
         vbar = 2**level*points[l_indices][:,1]
-        # Evaluate points at 'level' for quadrant k in [0,1,2]
+        # Evaluate points at 'level' for quadrant 'k' in [0,1,2]
         for k in range(3):
           k_indices = numpy.where( vbar<.5 ) if k==0 else \
                       numpy.where( ubar<.5 ) if k==2 else \
                       numpy.where( numpy.logical_and( ubar>=.5, vbar>=.5 ) )
           if not len(k_indices[0]): continue # No points to evaluate in this quadrant
           pts = numpy.concatenate( [transf( ubar[k_indices], not k==2 ),
-                                    transf( vbar[k_indices], not k==0 )], axis=1 ) # o.k.
-          temp = self.basepoly.eval( pts, grad=grad )
+                                    transf( vbar[k_indices], not k==0 )], axis=1 )
+          temp0 = numeric.dot( XAbar[k], Al ).T
+          temp1 = self.basepoly.eval( pts, grad=grad ).swapaxes(0,1)
           lk_indices = l_indices[0][k_indices],
-          result[lk_indices] = 2**(grad*(level+1)) * numeric.dot( numeric.dot( XAbar[k], Al ).T, temp.swapaxes(0,1) ).swapaxes(0,1)
+          result[lk_indices] = coeff * numeric.dot( temp0, temp1 ).swapaxes(0,1)
 
     else: # etype in (1,3)
-      result = numeric.dot( X.T, self.basepoly.eval( points, grad=grad ).swapaxes(0,1) ).swapaxes(0,1)
+      temp = self.basepoly.eval( points, grad=grad ).swapaxes(0,1)
+      result = numeric.dot( X.T, temp ).swapaxes(0,1)
 
     return result
 
