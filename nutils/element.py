@@ -1,5 +1,5 @@
 from . import log, util, numpy, core, numeric, function, _
-import warnings, time
+import time
 
 class TrimmedIScheme( object ):
   'integration scheme for truncated elements'
@@ -1904,37 +1904,40 @@ class CatmullClarkElem( StdElem ):
       XAbar = numeric.dot( X, Abar )
       transf = lambda x, shift=0: (2*x-shift)[:,_]
 
+      # Compute levels
       mvec = numpy.amax( numpy.asarray(points), axis=1 )
-      with warnings.catch_warnings(): # locally ignore RuntimeWarning thrown by log2 if mvec contains a 0.
-        warnings.simplefilter( 'ignore', RuntimeWarning )
-        lvec = numpy.floor( -numpy.log2(mvec) ).astype( 'int64', copy=False )
-      lvec[mvec==0.] = -1 # relabel inf, is lost by int conversion
+      where = mvec != 0. # relabel inf, would be lost by int conversion
+      lvec = -numpy.ones( where.shape ).astype( 'int64', copy=False )
+      lvec[where] = numpy.floor( -numpy.log2(mvec[where]) )
       assert all( lvec>-2 ), 'Point outside standard elem (i.e. outside [0,1]**d)'
-      for level in range( -1, max(lvec)+1 ):
-        l_indices = numpy.where( lvec==level )
+
+      # Extraordinary point (l=-1)
+      l_indices, = numpy.where( lvec==-1 )
+      if len(l_indices):
+        assert not grad, 'grad in extraordinary point unbounded.'
+        result[l_indices,:] = self.LimitStencil( self.valence, self.etype )[_,:]
+
+      # All other levels
+      for level in range( max(lvec)+1 ):
+        l_indices, = numpy.where( lvec==level )
         Al = numpy.dot( Al, A ) if level>0 else numpy.eye(len(A)) # At level 0, Al = Id
-        if not len(l_indices[0]): continue # No points to evaluate at this level
+        if not len(l_indices): continue # No points to evaluate at this level
         coeff = 2**(grad*(level+1))
 
-        if level==-1: # Evaluation in extraordinary point (0,0)
-          if grad: raise ValueError( 'grad in extraordinary point unbounded.' )
-          result[l_indices,:] = self.LimitStencil( self.valence, self.etype )[_,:]
-          continue
-
-        ubar = 2**level*points[l_indices][:,0]
-        vbar = 2**level*points[l_indices][:,1]
+        ubar = 2**level*points[l_indices,][:,0]
+        vbar = 2**level*points[l_indices,][:,1]
         # Evaluate points at 'level' for quadrant 'k' in [0,1,2]
         for k in range(3):
-          k_indices = numpy.where( vbar<.5 ) if k==0 else \
-                      numpy.where( ubar<.5 ) if k==2 else \
-                      numpy.where( numpy.logical_and( ubar>=.5, vbar>=.5 ) )
-          if not len(k_indices[0]): continue # No points to evaluate in this quadrant
-          pts = numpy.concatenate( [transf( ubar[k_indices], not k==2 ),
-                                    transf( vbar[k_indices], not k==0 )], axis=1 )
+          k_indices, = numpy.where( vbar<.5 ) if k==0 else \
+                       numpy.where( ubar<.5 ) if k==2 else \
+                       numpy.where( numpy.logical_and( ubar>=.5, vbar>=.5 ) )
+          if not len(k_indices): continue # No points to evaluate in this quadrant
+          pts = numpy.concatenate( [transf( ubar[k_indices,], not k==2 ),
+                                    transf( vbar[k_indices,], not k==0 )], axis=1 )
           temp0 = numeric.dot( XAbar[k], Al ).T
           temp1 = self.basepoly.eval( pts, grad=grad ).swapaxes(0,1)
-          lk_indices = l_indices[0][k_indices],
-          result[lk_indices] = coeff * numeric.dot( temp0, temp1 ).swapaxes(0,1)
+          lk_indices = l_indices[k_indices,]
+          result[lk_indices,] = coeff * numeric.dot( temp0, temp1 ).swapaxes(0,1)
 
     else: # etype in (1,3)
       temp = self.basepoly.eval( points, grad=grad ).swapaxes(0,1)
