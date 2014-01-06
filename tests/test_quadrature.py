@@ -206,10 +206,10 @@ class TestSingularQuadrature( object ):
     'Given a product element on our 3x4 domain (see __init__), plot gauss points'
     with plot.PyPlot( 'quad' ) as fig:
       pts, wts = elem.eval( ischeme )
-      affine = [int(n) for n in re.findall( r'\d+', elem.elem1.vertices[0].id )] # find elem1 position
+      affine = [int(n) for n in re.findall( r'\d+', elem.elem1.vertices[0] )] # find elem1 position
       fig.plot( pts[:,0] + affine[0] - 1.5,
                 pts[:,1] + affine[1] - 1.5, 'rx' )
-      affine = [int(n) for n in re.findall( r'\d+', elem.elem2.vertices[0].id )] # find elem2 position
+      affine = [int(n) for n in re.findall( r'\d+', elem.elem2.vertices[0] )] # find elem2 position
       fig.plot( pts[:,2] + affine[0] - 1.5,
                 pts[:,3] + affine[1] - 1.5, 'g+' )
       for x in range( 4 ): fig.plot( [x-1.5, x-1.5], [-1.5, 2.5], 'b-' ) # grid
