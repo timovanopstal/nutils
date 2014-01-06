@@ -225,7 +225,7 @@ def blender( path ):
   nmap = {}
   fmap = {}
   label = path.rsplit('/',1)[-1].rsplit('.')[0]
-  localverts = {1:[2,3,5,6], 2:[], 3:[2,5,3,4], 4:[2,5,7,6], 5:[2,5,7,6]}
+  localverts = {1:[2,3,5,6], 2:[], 3:[2,5,4,3], 4:[2,5,7,6], 5:[2,5,7,6]}
   for r in range(numrings):
     items = map( int, lines.next().split() )
     etype = items[0]
