@@ -23,6 +23,9 @@ class EvaluationError( Exception ):
     self.evaluable = evaluable
     self.values = values
 
+  def __repr__( self ):
+    return 'EvaluationError%s' % self
+
   def __str__( self ):
     'string representation'
 
@@ -2384,6 +2387,8 @@ def _equal( arg1, arg2 ):
 def asarray( arg ):
   'convert to ArrayFunc or numpy.ndarray'
   
+  if isinstance( arg, numpy.ndarray ) and arg.ndim == 0:
+    arg = arg[...]
   if _isfunc(arg):
     return arg
   arg = numpy.asarray( arg )
