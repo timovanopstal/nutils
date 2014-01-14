@@ -174,8 +174,13 @@ def gmesh( path, btags={}, name=None ):
     fmap_b[key] = element.BubbleTriangle( 1 )
     nmap_b[key] = numpy.concatenate( [val, [nvertices+i]] )
   bubblefunc = function.function( fmap_b, nmap_b, nvertices+len(nmap), 2 )
+  # Extend linearfunc to discontinuous linear basis
+  nmap_d = {}
+  for i, key in enumerate( nmap.iterkeys() ):
+    nmap_d[key] = 3*i+numpy.arange(3)
+  discontfunc = function.function( fmap, nmap_d, 3*len(nmap), 2 )
 
-  namedfuncs = { 'spline1': linearfunc, 'bubble1': bubblefunc }
+  namedfuncs = { 'spline1':linearfunc, 'bubble1':bubblefunc, 'discont1':discontfunc }
   topo = topology.UnstructuredTopology( elements, ndims=2, namedfuncs=namedfuncs )
   topo.boundary = topology.StructuredTopology( belements, periodic=(0,) ) if structured else \
                   topology.UnstructuredTopology( belements, ndims=1 )

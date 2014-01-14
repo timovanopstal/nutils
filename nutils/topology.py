@@ -1012,6 +1012,11 @@ class UnstructuredTopology( Topology ):
 
     return self.namedfuncs[ 'bubble1' ]
 
+  def discontfunc( self ):
+    'discontinuous linear func'
+
+    return self.namedfuncs[ 'discont1' ]
+
   @property
   @core.weakcache
   def refined( self ):
