@@ -323,7 +323,7 @@ class TestTopologyGlueing( object ):
     def K( x, y ):
       rInv = function.norm2( x-y )**-1.
       return 0.75*pi**-1. * (x-y)[:,_]*(x-y)[_,:] * ((x-y)*y.normal()).sum() * rInv**5
-    l2norm = lambda func: sqrt( sum( self.topo.integrate( func**2., 'gauss6', self.geom ) ) )
+    l2norm = lambda func: sqrt( sum( self.topo.integrate( func**2., 'gauss10', self.geom ) ) )
 
     # Boundary data
     velo = function.stack( [self.geom[2], 0., 0.] )
@@ -338,7 +338,7 @@ class TestTopologyGlueing( object ):
     integrand = (self.funcsp*(V(x,y)*function.opposite(self.funcsp)[:,_,_,:]).sum()).sum()
     mat = prod_topo.integrate_symm( integrand, title='int[mat]', **kwargs )
     integrand = (self.funcsp*(K(x,y)*function.opposite(velo)).sum()).sum()
-    vec = 0.5 * self.topo.integrate( (self.funcsp*velo).sum(), geometry=x, ischeme='gauss4' ) \
+    vec = 0.5 * self.topo.integrate( (self.funcsp*velo).sum(), geometry=x, ischeme='gauss6' ) \
         + prod_topo.integrate( integrand, title='int[vec]', **kwargs )
 
     # Solve
