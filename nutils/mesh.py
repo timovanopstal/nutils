@@ -201,11 +201,6 @@ def blender( path ):
   boundary_elem = element.CatmullClarkElem(4,etype=3)
   interior_elem = [element.CatmullClarkElem(valence,etype=4) for valence in range(3,9)]
   regular_elem = element.CatmullClarkElem(4,etype=5)
-  # Standard cubic basis
-  p = 4
-  n = 2*(p-1)-1
-  poly = element.PolyLine.spline_poly( p, n )[p-2]
-  stdelemcub = element.PolyLine( poly )**2
 
   # Read vertices
   items = lines.next().split()
