@@ -29,6 +29,10 @@ class TruncDict( dict ):
       del self[ self.__touched[-1] ]
     self.__touched.appendleft( item )
     assert len(self.__touched) == len(self)
+  
+  def clear( self ):
+    dict.clear( self )
+    self.__touched.clear()
 
 
 def _cache( func, cache ):
