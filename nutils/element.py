@@ -1039,6 +1039,7 @@ class QuadElement( Element ):
       x = [ numpy.linspace( 0, 1, N ) ] * ndims
       w = None
     elif where.startswith( 'vtk' ):
+      # TODO: if-block and subdiv fix unnecessary: coords = numpy.array( numpy.ndindex( ndims*(2,) ) )
       if ndims == 1:
         coords = numpy.array([[0,1]]).T
       elif ndims == 2:
@@ -1484,7 +1485,6 @@ class PolyProduct( StdElem ):
   @core.cache
   def eval( self, points, grad=0 ):
     'evaluate'
-    # log.debug( '@ PolyProduct.eval: ', id(self), id(points), id(grad) )
 
     assert isinstance( grad, int ) and grad >= 0
 
@@ -1773,7 +1773,7 @@ class ExtractionWrapper( object ):
 
 class CatmullClarkElem( StdElem ):
   '''subdivision surface element
-     implemented by Pieter Barendrecht August 2013.'''
+     implemented by Pieter Barendrecht/Timo van Opstal 2013.'''
 
   basepoly = PolyLine([[ 1./6,  2./3,  1./6, 0.  ],
                        [-1./2,  0.,    1./2, 0.  ],
