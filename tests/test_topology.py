@@ -353,10 +353,10 @@ class TestTopologyGlueing( object ):
 
 def visualinspect():
   'Visual inspection of StokesBEM test case.'
-  # visual = TestTopologyGlueing()
-  # visual.StokesBEM( visual=True )
-  visual = TestConnectivitySubdivision()
-  visual.orientations( visual=True )
+  # visual = TestConnectivitySubdivision()
+  # visual.orientations( visual=True )
+  visual = TestTopologyGlueing()
+  visual.StokesBEM( visual=True )
 
 util.run( visualinspect )
 

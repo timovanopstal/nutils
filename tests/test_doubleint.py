@@ -217,7 +217,7 @@ class TestShearFlow( object ):
 
 def main():
   a = TestShearFlow()
-  # a.test_InteriorProblem( visual=True ).
+  # a.test_InteriorProblem( visual=True )
   a.test_SubdivisionGeometry( visual=True, case='sphere' )
 
 if __name__ == '__main__':
