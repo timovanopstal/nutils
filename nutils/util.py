@@ -1,5 +1,6 @@
-from . import log, prop, debug, core
-import sys, os, time, numpy, cPickle, hashlib, weakref, warnings, itertools
+from . import log, prop, numeric
+import sys, os, time, warnings, itertools
+
 
 def unreachable_items():
   # see http://stackoverflow.com/questions/16911559/trouble-understanding-pythons-gc-garbage-for-tracing-memory-leaks
@@ -49,29 +50,6 @@ class _SuppressedOutput( object ):
     os.close( self.stderr )
 
 suppressed_output = _SuppressedOutput()
-
-class ImmutableArray( numpy.ndarray ):
-  'immutable array'
-
-  flags = None
-
-  def __new__( self, arr ):
-    'constructor'
-
-    arr = numpy.asarray( arr )
-    arr.flags.writeable = False
-    arr = arr.view( ImmutableArray )
-    return arr
-
-  def __eq__( self, other ):
-    'equals'
-
-    return self is other
-
-  def __hash__( self ):
-    'hash'
-
-    return hash( id(self) )
 
 class Product( object ):
   def __init__( self, iter1, iter2 ):
@@ -131,39 +109,6 @@ def profile( func, mintime=0 ):
   del frame.f_locals['__profile_retval__']
   return retval
 
-class Cache( object ):
-  'cache'
-
-  def __init__( self, *args ):
-    'constructor'
-
-    import hashlib
-    strhash = ','.join( str(arg) for arg in args )
-    md5hash = hashlib.md5( strhash ).hexdigest()
-    log.info( 'using cache:', md5hash )
-    cachedir = getattr( prop, 'cachedir', 'cache' )
-    if not os.path.exists( cachedir ):
-      os.makedirs( cachedir )
-    path = os.path.join( cachedir, md5hash )
-    self.data = file( path, 'ab+' if not getattr( prop, 'recache', False ) else 'wb+' )
-
-  def __call__( self, func, *args, **kwargs ):
-    'call'
-
-    name = func.__name__ + ''.join( ' %s' % arg for arg in args ) + ''.join( ' %s=%s' % item for item in kwargs.iteritems() )
-    pos = self.data.tell()
-    try:
-      data = cPickle.load( self.data )
-    except EOFError:
-      data = func( *args, **kwargs)
-      self.data.seek( pos )
-      cPickle.dump( data, self.data, -1 )
-      msg = 'written to'
-    else:
-      msg = 'loaded from'
-    log.info( msg, 'cache:', name, '[%db]' % (self.data.tell()-pos) )
-    return data
-
 def getpath( pattern ):
   'create file in dumpdir'
 
@@ -217,27 +162,27 @@ def iterate( context='iter', nmax=-1 ):
     finally:
       logger.disable()
 
-class NanVec( numpy.ndarray ):
+class NanVec( numeric.NumericArray ):
   'nan-initialized vector'
 
   def __new__( cls, length ):
     'new'
 
-    vec = numpy.empty( length ).view( cls )
-    vec[:] = numpy.nan
+    vec = numeric.empty( length ).view( cls )
+    vec[:] = numeric.nan
     return vec
 
   @property
   def where( self ):
     'find non-nan items'
 
-    return ~numpy.isnan( self.view(numpy.ndarray) )
+    return ~numeric.isnan( self )
 
   def __iand__( self, other ):
     'combine'
 
     where = self.where
-    if numpy.isscalar( other ):
+    if numeric.isscalar( other ):
       self[ where ] = other
     else:
       where &= other.where
@@ -253,7 +198,7 @@ class NanVec( numpy.ndarray ):
     'combine'
 
     wherenot = ~self.where
-    self[ wherenot ] = other if numpy.isscalar( other ) else other[ wherenot ]
+    self[ wherenot ] = other if numeric.isscalar( other ) else other[ wherenot ]
     return self
 
   def __or__( self, other ):
@@ -283,23 +228,16 @@ def tensorial( args ):
   'create n-dimensional array containing tensorial combinations of n args'
 
   shape = map( len, args )
-  array = numpy.empty( shape, dtype=object )
-  for index in numpy.lib.index_tricks.ndindex( *shape ):
+  array = numeric.empty( shape, dtype=object )
+  for index in numeric.ndindex( *shape ):
     array[index] = tuple([ arg[i] for arg, i in zip(args,index) ])
   return array
 
 def arraymap( f, dtype, *args ):
   'call f for sequence of arguments and cast to dtype'
 
-  return numpy.array( map( f, args[0] ) if len( args ) == 1
-                 else [ f( *arg ) for arg in numpy.broadcast( *args ) ], dtype=dtype )
-
-def objmap( func, *arrays ):
-  'map numpy arrays'
-
-  #arrays = map( numpy.asarray, arrays )
-  arrays = [ numpy.asarray( array, dtype=object ) for array in arrays ]
-  return numpy.frompyfunc( func, len(arrays), 1 )( *arrays )
+  return numeric.array( map( f, args[0] ) if len( args ) == 1
+                 else [ f( *arg ) for arg in numeric.broadcast( *args ) ], dtype=dtype )
 
 def fail( msg, *args ):
   'generate exception'
@@ -351,6 +289,7 @@ class Statm( object ):
 def run( *functions ):
   'call function specified on command line'
 
+  from . import debug
   assert functions
 
   properties = {
@@ -361,6 +300,7 @@ def run( *functions ):
     'symlink': False,
     'recache': False,
     'dot': False,
+    'profile': False,
   }
   try:
     execfile( os.path.expanduser( '~/.nutilsrc' ), {}, properties )
@@ -379,7 +319,8 @@ def run( *functions ):
   --imagetype=%(imagetype)-11s Set image type
   --symlink=%(symlink)-13s Create symlink to latest results
   --recache=%(recache)-13s Overwrite existing cache
-  --dot=%(dot)-17s Set graphviz executable''' % properties
+  --dot=%(dot)-17s Set graphviz executable
+  --profile=%(profile)-13s Show profile summary at exit''' % properties
     for i, func in enumerate( functions ):
       print
       print 'Arguments for %s%s' % ( func.func_name, '' if i else ' (default)' )
@@ -451,7 +392,7 @@ def run( *functions ):
       open( outdir + filename, 'w' ).write( open( logpath + filename, 'r' ).read() )
 
   htmlfile = open( dumpdir+'log.html', 'w' )
-  log.setup_html( maxlevel=prop.verbose, fileobj=htmlfile, title=scriptname + time.strftime( ' %Y/%m/%d %H:%M:%S', localtime ) )
+  log.setup_html( fileobj=htmlfile, title=scriptname + time.strftime( ' %Y/%m/%d %H:%M:%S', localtime ) )
 
   prop.dumpdir = dumpdir
 
@@ -477,7 +418,13 @@ def run( *functions ):
   warnings.resetwarnings()
 
   t0 = time.time()
-  tb = False
+  exc_tb = False
+
+  if prop.profile:
+    import cProfile
+    prof = cProfile.Profile()
+    prof.enable()
+
   try:
     func( **kwargs )
   except KeyboardInterrupt:
@@ -485,8 +432,12 @@ def run( *functions ):
   except Terminate, exc:
     log.error( 'terminated:', exc )
   except:
-    tb = debug.exception()
-    log.stack( repr(sys.exc_value), tb )
+    exc_value = sys.exc_value
+    exc_tb = debug.exception()
+    log.stack( repr(exc_value), exc_tb )
+
+  if prop.profile:
+    prof.disable()
 
   if hasattr( os, 'wait' ):
     try: # wait for child processes to die
@@ -504,18 +455,19 @@ def run( *functions ):
   log.info( 'finish %s\n' % time.ctime() )
   log.info( 'elapsed %02.0f:%02.0f:%02.0f' % ( hours, minutes, seconds ) )
 
-  cacheinfo = core.cache_info( brief=True )
-  if cacheinfo:
-    log.warning( '\n  '.join( ['some caches were saturated:'] + cacheinfo ) )
+  if prop.profile:
+    import pstats
+    stream = log.getstream( 'warning' )
+    stream.write( 'profile results:\n' )
+    pstats.Stats( prof, stream=stream ).strip_dirs().sort_stats( 'time' ).print_stats()
 
-  if not tb:
+  if not exc_tb:
     sys.exit( 0 )
 
-  debug.write_html( htmlfile, sys.exc_value, tb )
-  htmlfile.write( '<span class="info">Cache usage:<ul>%s</ul></span>' % '\n'.join( '<li>%s</li>' % line for line in core.cache_info( brief=False ) ) )
+  debug.write_html( htmlfile, exc_value, exc_tb )
   htmlfile.flush()
 
-  debug.Explorer( repr(sys.exc_value), tb, intro='''\
+  debug.Explorer( repr(exc_value), exc_tb, intro='''\
     Your program has died. The traceback exporer allows you to examine its
     post-mortem state to figure out why this happened. Type 'help' for an
     overview of commands to get going.''' ).cmdloop()

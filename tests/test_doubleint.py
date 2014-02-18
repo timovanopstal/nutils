@@ -2,10 +2,10 @@
 
 from nutils import *
 import numpy, warnings
-almostEquals = lambda val, places=7: numpy.abs( val ) < 10.**(-places)
-infnorm = lambda f: numpy.linalg.norm( f, numpy.inf )
-grid = lambda n: numpy.linspace( -n/2., n/2., n+1 )
-pi = numpy.pi
+almostEquals = lambda val, places=7: numeric.abs( val ) < 10.**(-places)
+infnorm = lambda f: numpy.linalg.norm( f, numeric.inf )
+grid = lambda n: numeric.linspace( -n/2., n/2., n+1 )
+pi = numeric.pi
 def V( x, y ):
   rInv = function.norm2( x-y )**-1.
   return 0.125*pi**-1. * (function.eye(3)*rInv + (x-y)[:,_]*(x-y)[_,:]*rInv**3)
@@ -53,7 +53,7 @@ class TestSingularDoubleInt( object ):
     assert almostEquals( val - 1./3 )
 
   def test_Integration( self ):
-    grid = numpy.linspace( 0., 1., 4 )
+    grid = numeric.linspace( 0., 1., 4 )
     domain, geom = mesh.rectilinear( 2*(grid,) )
     ddomain = domain * domain
 
@@ -93,7 +93,7 @@ class TestNormalInKernelOfV( object ):
 
   def test_SphericalGeometry( self ):
     'n in ker(V), case: sphere.'
-    cos, sin, pi = function.cos, function.sin, numpy.pi
+    cos, sin, pi = function.cos, function.sin, numeric.pi
     phi, theta = .5*pi*self.geom # |phi| < pi, |theta| < pi/2
     self.sphere = function.stack( [cos(phi)*cos(theta), sin(phi)*cos(theta), sin(theta)] )
 
@@ -106,7 +106,7 @@ class TestNormalInKernelOfV( object ):
 
     abs = function.abs
     xi, eta = self.geom
-    self.octahedron = function.Concatenate( [[(1.-abs( eta ))*function.piecewise( xi, (-1., 0., 1.), 1, -2*xi-1, -1, 2*xi-3 )], [(1.-abs( eta ))*function.piecewise( xi, (-1., 0., 1.), 2*xi+3, 1, 1-2*xi, -1 )], [numpy.sqrt(2)*eta]] )
+    self.octahedron = function.Concatenate( [[(1.-abs( eta ))*function.piecewise( xi, (-1., 0., 1.), 1, -2*xi-1, -1, 2*xi-3 )], [(1.-abs( eta ))*function.piecewise( xi, (-1., 0., 1.), 2*xi+3, 1, 1-2*xi, -1 )], [numeric.sqrt(2)*eta]] )
 
     err = self.template( 4, self.octahedron )
     assert almostEquals( infnorm( err ) - 0., places=3 )
@@ -117,7 +117,7 @@ class TestKroneckerKernelGivesSurface( object ):
   def test_SphericalGeometry( self ):
     'Integrating Id gives surf, case: sphere.'
     domain, geom = mesh.rectilinear( (grid(4),grid(2)), periodic=(0,) )
-    cos, sin, pi = function.cos, function.sin, numpy.pi
+    cos, sin, pi = function.cos, function.sin, numeric.pi
     phi, theta = .5*pi*geom # |phi| < pi, |theta| < pi/2
     sphere = function.stack( [cos(phi)*cos(theta), sin(phi)*cos(theta), sin(theta)] )
     velo = domain.splinefunc( degree=2*(2,) ).vector(3)
@@ -152,7 +152,7 @@ class TestOneInKernelOfK( object ):
 
   def test_SphericalGeometry( self ):
     '1 in ker(K), case: sphere.'
-    cos, sin, pi = function.cos, function.sin, numpy.pi
+    cos, sin, pi = function.cos, function.sin, numeric.pi
     phi, theta = .5*pi*self.geom # |phi| < pi, |theta| < pi/2
     self.sphere = function.stack( [cos(phi)*cos(theta), sin(phi)*cos(theta), sin(theta)] )
 

@@ -1,5 +1,5 @@
-from . import prop, log, numpy, debug
-import os, sys, multiprocessing, thread
+from . import prop, log, debug
+import os, sys, multiprocessing, thread, numpy
 
 Lock = multiprocessing.Lock
 cpu_count = multiprocessing.cpu_count
@@ -135,7 +135,6 @@ def fork( func, nice=19 ):
 def shzeros( shape, dtype=float ):
   'create zero-initialized array in shared memory'
 
-  # return numpy.zeros( shape, dtype=dtype ) # TODO: toggle to numpy for debugging
   if isinstance( shape, int ):
     shape = shape,
   else:

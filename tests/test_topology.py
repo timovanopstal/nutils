@@ -3,7 +3,7 @@
 from nutils import *
 import numpy, copy
 
-grid = numpy.linspace( 0., 1., 4 )
+grid = numeric.linspace( 0., 1., 4 )
 def inputfile():
   'Create approximate sphere: smallest closed subdivision surface with extraordinary points and only quad elements.'
   f = open( 'sphere.sdv', 'w' )
@@ -103,26 +103,28 @@ class TestStructure2D( object ):
   def verify_connectivity( self, structure, geom ):
     (e00,e01), (e10,e11) = structure
 
-    a0 = geom( e00, numpy.array([0,1]) )
-    a1 = geom( e01, numpy.array([0,0]) )
+    geom = geom.compiled()
+
+    a0 = geom.eval( e00, numeric.array([0,1]) )
+    a1 = geom.eval( e01, numeric.array([0,0]) )
     numpy.testing.assert_array_almost_equal( a0, a1 )
 
-    b0 = geom( e10, numpy.array([1,1]) )
-    b1 = geom( e11, numpy.array([1,0]) )
+    b0 = geom.eval( e10, numeric.array([1,1]) )
+    b1 = geom.eval( e11, numeric.array([1,0]) )
     numpy.testing.assert_array_almost_equal( b0, b1 )
 
-    c0 = geom( e00, numpy.array([1,0]) )
-    c1 = geom( e10, numpy.array([0,0]) )
+    c0 = geom.eval( e00, numeric.array([1,0]) )
+    c1 = geom.eval( e10, numeric.array([0,0]) )
     numpy.testing.assert_array_almost_equal( c0, c1 )
 
-    d0 = geom( e01, numpy.array([1,1]) )
-    d1 = geom( e11, numpy.array([0,1]) )
+    d0 = geom.eval( e01, numeric.array([1,1]) )
+    d1 = geom.eval( e11, numeric.array([0,1]) )
     numpy.testing.assert_array_almost_equal( d0, d1 )
 
-    x00 = geom( e00, numpy.array([1,1]) )
-    x01 = geom( e01, numpy.array([1,0]) )
-    x10 = geom( e10, numpy.array([0,1]) )
-    x11 = geom( e11, numpy.array([0,0]) )
+    x00 = geom.eval( e00, numeric.array([1,1]) )
+    x01 = geom.eval( e01, numeric.array([1,0]) )
+    x10 = geom.eval( e10, numeric.array([0,1]) )
+    x11 = geom.eval( e11, numeric.array([0,0]) )
     numpy.testing.assert_array_almost_equal( x00, x01 )
     numpy.testing.assert_array_almost_equal( x10, x11 )
     numpy.testing.assert_array_almost_equal( x00, x11 )
@@ -145,8 +147,8 @@ class TestTopologyGlueing( object ):
   def __init__( self ):
     'Create half dome geometry for glueing.'
     # Aliases
-    pi, sqrt, sin, cos, abs = numpy.pi, function.sqrt, function.sin, function.cos, function.abs
-    grid = numpy.linspace( -.25*pi, .25*pi, 5 )
+    pi, sqrt, sin, cos, abs = numeric.pi, function.sqrt, function.sin, function.cos, function.abs
+    grid = numeric.linspace( -.25*pi, .25*pi, 5 )
 
     # Half dome
     self.topo0, (xi, eta) = mesh.rectilinear( 2*(grid,) )
@@ -221,12 +223,12 @@ class TestTopologyGlueing( object ):
           errs[key] = []
           for q in qset:
             Fq = integrate( q )
-            errs[key].append( numpy.abs(F/Fq-1) )
+            errs[key].append( numeric.abs(F/Fq-1) )
 
         elif len(qset) == 1:
           # Test assertions on exact quadrature
           Fq = integrate( qset[0] )
-          err = numpy.abs(F/Fq-1)
+          err = numeric.abs(F/Fq-1)
           assert err < 1.e-12, 'Nonexact quadrature, err = %.1e' % err
 
         elif len(qset) == 2:
@@ -234,9 +236,9 @@ class TestTopologyGlueing( object ):
           q0, q1 = tuple( qset )
           F0 = integrate( q0 )
           F1 = integrate( q1 )
-          err0 = numpy.abs(F/F0-1)
-          err1 = numpy.abs(F/F1-1)
-          slope = numpy.log10(err1/err0)/(q1-q0)
+          err0 = numeric.abs(F/F0-1)
+          err1 = numeric.abs(F/F1-1)
+          slope = numeric.log10(err1/err0)/(q1-q0)
           assert slope <= (-2. if slopes is None else slopes[neighbor]) or err1 < 1.e-12, \
               'Insufficient quadrature convergence (is func analytic?), slope = %.2f' % slope
 
@@ -255,13 +257,14 @@ class TestTopologyGlueing( object ):
     'Topology glueing should not raise any errors.'
     # 0. Test if glue passes without errors: done in __init__(), is the resulting glued topology up to specs?
     assert len(self.topo) == 32
-    keys_provided = set( key for key in self.topo.groups.iterkeys() )
-    keys_required = set( ['bottom.mb', 'left.mb', 'right.mb', 'top.mb',
-                          'bottom.sb', 'left.sb', 'right.sb', 'top.sb',
-                          '__glued__', '__master__', '__master_bnd__',
-                          '__slave__', '__slave_bnd__'] )
-    assert len(keys_provided) == len(keys_required) and not (keys_provided-keys_required), \
-        'Something went awry with copying groups into union topology.'
+    keys_provided = set( self.topo.groups )
+    keys_required = set(['master', 'slave'])
+    assert keys_provided == keys_required, 'Something went awry with copying groups into union topology.'
+
+    bkeys_provided = set( self.topo.boundary.groups )
+    bkeys_required = set(['master', 'master_bottom', 'master_left', 'master_right', 'master_top',
+                          'slave', 'slave_bottom', 'slave_left', 'slave_right', 'slave_top' ])
+    assert bkeys_provided == bkeys_required, 'Something went awry with copying boundary groups into union topology.'
 
     # 1. The connectivity should still be correct, cf. test_quadrature.TestSingularQuadrature.test_connectivity
     elem = self.topo.elements
@@ -301,22 +304,18 @@ class TestTopologyGlueing( object ):
 
   def test_2DNodeRelabelingBigMaster( self ):
     'This should raise an AssertionError, as there are too many master elements.'
-    topo0 = copy.deepcopy( self.topo0 ) # Don't modify the original object
-    topo0.boundary.groups['__glue__'] = topo0.boundary + topo0[:1,:1].boundary['right'] # For some strange reason deepcopy skips boundary['__glue__']
-    args = topo0, self.topo1, self.geom
-    numpy.testing.assert_raises( AssertionError, topology.glue, *args )
+    self.topo0.boundary.groups['__glue__'] = self.topo0.boundary + self.topo0[:1,:1].boundary['right'] # For some strange reason deepcopy skips boundary['__glue__']
+    numpy.testing.assert_raises( AssertionError, topology.glue, self.topo0, self.topo1, self.geom )
 
   def test_2DNodeRelabelingBigSlave( self ):
     'This should raise an AssertionError, as there are too many slave elements.'
-    topo1 = copy.deepcopy( self.topo1 )
-    topo1.boundary.groups['__glue__'] = topo1.boundary + topo1[:1,:1].boundary['right']
-    args = self.topo0, topo1, self.geom
-    numpy.testing.assert_raises( AssertionError, topology.glue, *args )
+    self.topo1.boundary.groups['__glue__'] = self.topo1.boundary + self.topo1[:1,:1].boundary['right']
+    numpy.testing.assert_raises( AssertionError, topology.glue, self.topo0, self.topo1, self.geom )
 
   def StokesBEM( self, visual=False ):
     'The singular integration scheme depends on the correct functioning of Topology.glue().'
     # Aliases and definitions
-    pi, sqrt, sin, cos, abs = numpy.pi, function.sqrt, function.sin, function.cos, function.abs
+    pi, sqrt, sin, cos, abs = numeric.pi, function.sqrt, function.sin, function.cos, function.abs
     def V( x, y ):
       rInv = function.norm2( x-y )**-1.
       return 0.125*pi**-1. * (function.eye(3)*rInv + (x-y)[:,_]*(x-y)[_,:]*rInv**3)
@@ -358,6 +357,7 @@ def visualinspect():
   visual = TestTopologyGlueing()
   visual.StokesBEM( visual=True )
 
-util.run( visualinspect )
+if __name__ == '__main__':
+  util.run( visualinspect )
 
 # vim:shiftwidth=2:foldmethod=indent:foldnestmax=2
