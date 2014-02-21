@@ -1,5 +1,5 @@
-from . import log, util, numpy, cache, numeric, transform, function, _
-import warnings
+from . import log, util, cache, numeric, transform, function, _
+import warnings, numpy
 
 PrimaryVertex = str
 HalfVertex = lambda vertex1, vertex2, xi=.5: '%s<%.3f>%s' % ( (vertex1,xi,vertex2) if vertex1 < vertex2 else (vertex2,1-xi,vertex1) )
@@ -1564,10 +1564,11 @@ class CatmullClarkElem( StdElem ):
   '''subdivision surface element
      implemented by Pieter Barendrecht/Timo van Opstal 2013.'''
 
-  basepoly = PolyLine([[ 1./6,  2./3,  1./6, 0.  ],
-                       [-1./2,  0.,    1./2, 0.  ],
-                       [ 1./2, -1.,    1./2, 0.  ],
-                       [-1./6,  1./2, -1./2, 1./6]])**2
+  basepoly = PolyLine( numeric.array(
+      [[ 1./6,  2./3,  1./6, 0.  ],
+       [-1./2,  0.,    1./2, 0.  ],
+       [ 1./2, -1.,    1./2, 0.  ],
+       [-1./6,  1./2, -1./2, 1./6]] ) )**2
 
   @staticmethod
   def X( n, etype ):
@@ -1622,7 +1623,7 @@ class CatmullClarkElem( StdElem ):
     assert etype >= 4, 'Extended subdivision matrix should not be required.'
 
     # Matrix blocks
-    i1, i2, i3 = numeric.cumsum( [ 4*n+1, 7, 9 ] )
+    i1, i2, i3 = numeric.cumsum( [ 2*n+1, 7, 9 ] )
     Abar = numeric.empty( [i3,i2] )
     Abar[0:i1,i1:i2] = 0
     S   = Abar[ 0:i1, 0:i1]
@@ -1720,12 +1721,10 @@ class CatmullClarkElem( StdElem ):
     Gamma = (2.*b + 8.*c) / (Denom*n)
     return numeric.array( [Alpha] + [Beta, Gamma]*n + [0.]*7 )
 
-  def __new__( cls, n, etype ):
+  def __init__( self, n, etype ):
     'constructor'
-    self = object.__new__( cls )
     self.valence = n
     self.etype = etype
-    return self
 
   def eval( self, points, grad=0 ):
     'evaluate'
@@ -1740,9 +1739,9 @@ class CatmullClarkElem( StdElem ):
       transf = lambda x, shift=0: (2*x-shift)[:,_]
 
       # Compute levels
-      mvec = numpy.amax( numeric.asarray(points), axis=1 )
+      mvec = numpy.amax( numpy.asarray(points), axis=1 )
       where = mvec != 0. # relabel inf, would be lost by int conversion
-      lvec = -numeric.ones( where.shape ).astype( 'int64', copy=False )
+      lvec = -numpy.ones( where.shape ).astype( 'int64', copy=False )
       lvec[where] = numpy.floor( -numpy.log2(mvec[where]) )
       assert all( lvec>-2 ), 'Point outside standard elem (i.e. outside [0,1]**d)'
 

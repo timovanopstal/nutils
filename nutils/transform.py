@@ -214,6 +214,10 @@ class Identity( Transformation ):
   def inv( self ):
     return self
 
+  @property
+  def matrix( self ):
+    return numeric.eye(self.todim)
+
   def __str__( self ):
     return 'x'
 
