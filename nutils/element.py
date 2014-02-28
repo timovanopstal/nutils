@@ -1758,8 +1758,8 @@ class CatmullClarkElem( StdElem ):
         if not len(l_indices): continue # No points to evaluate at this level
         coeff = 2**(grad*(level+1))
 
-        ubar = 2**level*points[l_indices,][:,0]
-        vbar = 2**level*points[l_indices,][:,1]
+        ubar = 2**level*numpy.asarray(points)[l_indices,][:,0]
+        vbar = 2**level*numpy.asarray(points)[l_indices,][:,1]
         # Evaluate points at 'level' for quadrant 'k' in [0,1,2]
         for k in range(3):
           k_indices, = numpy.where( vbar<.5 ) if k==0 else \
