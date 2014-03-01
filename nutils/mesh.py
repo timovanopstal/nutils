@@ -202,6 +202,7 @@ def blender( path ):
 
   # Read vertices
   items = lines.next().split()
+  assert items[0] == 'Verts', 'Corrupted input file'
   numverts = int(items[1])
   dofs = numeric.zeros([numverts,3])
   for v in range(numverts):
@@ -212,8 +213,9 @@ def blender( path ):
 
   # Read rings
   items = lines.next().split()
+  assert items[0] == 'Rings', 'Corrupted input file'
   numrings = int(items[1])
-  neighbor_flag = bool(int(items[2])) # TODO: remove from export plugin, info not used by nutils
+  neighbor_flag = bool(int(items[2]))
 
   # Read elements
   elements = []
@@ -228,7 +230,7 @@ def blender( path ):
     vertices = [ element.PrimaryVertex( label+'(%i)'%items[i] ) for i in localverts[etype] ]
     elem = element.QuadElement( 2, vertices )
     elements.append( elem )
-    if neighbor_flag: lines.next().split() # TODO: remove from export plugin, info not used by nutils
+    if neighbor_flag: lines.next() # neighbor information extracted from shared vertices
 
     # Local and global DOF numbering
     if etype == 1: # CornerBnd
@@ -246,6 +248,7 @@ def blender( path ):
 
   # Read groups
   items = lines.next().split()
+  assert items[0] == 'FaceGroups', 'Corrupted input file'
   numgroups = int(items[1]) # TODO: consider the case that there are no groups in the input file
   groups = {}
   for g in range(numgroups):
