@@ -1741,8 +1741,8 @@ class CatmullClarkElem( StdElem ):
       # Compute levels
       mvec = numpy.amax( numpy.asarray(points), axis=1 )
       where = mvec != 0. # relabel inf, would be lost by int conversion
-      lvec = -numpy.ones( where.shape ).astype( 'int64', copy=False )
-      lvec[where] = numpy.floor( -numpy.log2(mvec[where]) )
+      lvec = numpy.array( mvec.shape[0]*[-1] )
+      lvec[where] = numpy.floor( -numpy.log2(mvec[where]) ).astype(int)
       assert all( lvec>-2 ), 'Point outside standard elem (i.e. outside [0,1]**d)'
 
       # Extraordinary point (l=-1)
