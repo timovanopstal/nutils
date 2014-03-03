@@ -170,7 +170,7 @@ NPY_NO_EXPORT PyTypeObject NumericArray_Type = {
   PyObject_HEAD_INIT(NULL)
   0, // ob_size
   "NumericArray", // tp_name
-  NPY_SIZEOF_PYARRAYOBJECT, // tp_basicsize
+  sizeof(PyArrayObject), // tp_basicsize
   0, 0, 0, 0, 0, 0, 0,
   &numeric_as_number, // tp_as_number
   0, 0,

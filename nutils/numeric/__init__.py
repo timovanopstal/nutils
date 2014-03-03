@@ -13,7 +13,8 @@ for name in ( 'abs', 'add', 'arange', 'arccos', 'arcsin', 'arctan2', 'arctanh',
   'ones_like', 'power', 'prod', 'product', 'reciprocal', 'repeat', 'roll',
   'searchsorted', 'sign', 'sign', 'sin', 'sinh', 'linalg.solve', 'sqrt',
   'subtract', 'sum', 'tan', 'tanh', 'vstack', 'zeros', 'zeros_like',
-  'union1d', 'intersect1d', 'setxor1d', 'setdiff1d', 'sort' ):
+  'union1d', 'intersect1d', 'setxor1d', 'setdiff1d', 'sort', 'argsort',
+  'lib.stride_tricks.as_strided' ):
   obj = numpy
   for name in name.split( '.' ):
     obj = getattr( obj, name )
@@ -88,18 +89,21 @@ def det( A ):
     det[I] = numpy.linalg.det( A[I] )
   return det
 
-def getitem( A, axis, indices ):
-  indices = (slice(None),) * axis + (indices,) if axis >= 0 \
-       else (Ellipsis,indices) + (slice(None),) * (-axis-1)
+def getitem( A, axis, item ):
+  indices = (slice(None),) * axis + (item,) if axis >= 0 \
+       else (Ellipsis,item) + (slice(None),) * (-axis-1)
   return asarray( A )[ indices ]
-
-def as_strided( A, shape, strides ):
-  return numpy.lib.stride_tricks.as_strided( A, shape, strides ).view( NumericArray )
 
 def norm2( A, axis=-1 ):
   'L2 norm over specified axis'
 
   return sqrt( contract( A, A, axis ) )
+
+def containssorted( array, item ):
+  _item = empty( (), dtype=array.dtype )
+  _item[()] = item
+  index = searchsorted( array, _item )
+  return index < len(array) and array[index] == item
 
 def findsorted( array, items ):
   indices = searchsorted( array, items )
@@ -108,7 +112,9 @@ def findsorted( array, items ):
   return indices
 
 def find( arr ):
-  nz, = arr.ravel().nonzero()
+  arr = asarray( arr )
+  assert arr.ndim == 1
+  nz, = arr.nonzero()
   return nz.view( NumericArray )
 
 def objmap( func, *arrays ):
@@ -117,6 +123,23 @@ def objmap( func, *arrays ):
   arrays = [ asarray( array, dtype=object ) for array in arrays ]
   return numpy.frompyfunc( func, len(arrays), 1 )( *arrays )
 
+def insert( arr, axis ):
+  if axis < 0:
+    axis += arr.ndim + 1
+  assert 0 <= axis < arr.ndim + 1
+  return arr[ (slice(None),)*axis+(newaxis,) ]
+
+def kronecker( arr, axis, length, index ):
+  if length == 0:
+    assert index == 0
+    return insert( arr, index )
+  if axis < 0:
+    axis += arr.ndim + 1
+  assert 0 <= axis < arr.ndim + 1
+  assert 0 <= index < length
+  expanded = zeros( arr.shape[:axis] + (length,) + arr.shape[axis:] )
+  expanded[(slice(None),)*axis+(index,)] = arr
+  return expanded
 
 #####
 
@@ -141,8 +164,7 @@ def align( arr, trans, ndim ):
   strides[trans] = arr.strides
   shape = ones( ndim, dtype=int )
   shape[trans] = arr.shape
-  tmp = as_strided( arr, shape, strides )
-  return tmp
+  return as_strided( arr, shape, strides )
 
 def expand( arr, *shape ):
   'expand'
@@ -305,7 +327,22 @@ def fastrepeat( A, nrepeat, axis=-1 ):
   shape[axis] = nrepeat
   strides = list( A.strides )
   strides[axis] = 0
-  return as_strided( A, shape, strides )
+  fastrepeat = as_strided( A, shape, strides )
+  fastrepeat.flags.writeable = False
+  return fastrepeat
+
+def overlapping( arr, axis=-1, n=2 ):
+  'reinterpret data with overlaps'
+
+  arr = asarray( arr )
+  if axis < 0:
+    axis += arr.ndim
+  assert 0 <= axis < arr.ndim
+  shape = arr.shape[:axis] + (arr.shape[axis]-n+1,n) + arr.shape[axis+1:]
+  strides = arr.strides[:axis] + (arr.strides[axis],arr.strides[axis]) + arr.strides[axis+1:]
+  overlapping = as_strided( arr, shape, strides )
+  overlapping.flags.writeable = False
+  return overlapping
 
 def fastmeshgrid( X, Y ):
   'mesh grid based on fastrepeat'

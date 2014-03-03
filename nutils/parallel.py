@@ -121,6 +121,7 @@ def fork( func, nice=19 ):
       # this didn't work: http://stackoverflow.com/a/6718735/445031
       return pid
     try:
+      prop.nprocs = 1
       os.nice( nice )
       func( *args, **kwargs )
     except KeyboardInterrupt:

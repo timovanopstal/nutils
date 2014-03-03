@@ -59,7 +59,7 @@ class BasePlot( object ):
 class PyPlot( BasePlot ):
   'matplotlib figure'
 
-  def __init__( self, name, imgtype=None, ndigits=3, index=None, **kwargs ):
+  def __init__( self, name, imgtype=None, ndigits=3, index=None, transparent=False, **kwargs ):
     'constructor'
 
     BasePlot.__init__( self, name, ndigits=ndigits, index=index )
@@ -69,6 +69,7 @@ class PyPlot( BasePlot ):
 
     imgtype = getattr( prop, 'imagetype', 'png' ) if imgtype is None else imgtype
     self.names = [ self.name + '.' + ext for ext in imgtype.split(',') ]
+    self.transparent = transparent
 
     from matplotlib import pyplot
     self.__dict__.update( pyplot.__dict__ )
@@ -86,7 +87,7 @@ class PyPlot( BasePlot ):
   def save( self, name ):
     'save images'
 
-    self.savefig( os.path.join( self.path, name ) )
+    self.savefig( os.path.join( self.path, name ), transparent=self.transparent )
     #self.close()
 
   @staticmethod

@@ -26,28 +26,20 @@ def makeplots( domain, geom, velo, pres, index ):
     plt.mesh( points, stream%period, edgecolors='none', triangulate='bezier', cmap=cm.hsv )
     plt.clim( 0, period )
     plt.colorbar()
-    plt.xlim( 0, 1 )
-    plt.ylim( 0, 1 )
 
   with plot.PyPlot( 'velo', index=index, ndigits=4 ) as plt:
     plt.mesh( points, velo, edgecolors='none', triangulate='bezier' )
     plt.clim( 0, .9 )
     plt.colorbar()
     plt.quiver( xy[:,0], xy[:,1], uv[:,0], uv[:,1] )
-    plt.xlim( 0, 1 )
-    plt.ylim( 0, 1 )
 
   with plot.PyPlot( 'pres', index=index, ndigits=4 ) as plt:
     plt.mesh( points, pres, edgecolors='none', triangulate='bezier' )
     plt.colorbar()
-    plt.xlim( 0, 1 )
-    plt.ylim( 0, 1 )
 
   with plot.PyPlot( 'div', index=index, ndigits=4 ) as plt:
     plt.mesh( points, div, edgecolors='none', triangulate='bezier' )
     plt.colorbar()
-    plt.xlim( 0, 1 )
-    plt.ylim( 0, 1 )
 
 
 @util.withrepr
@@ -55,7 +47,7 @@ def Gauss( center, width, height ):
   return lambda x: height * function.exp( -((x-center)/width)**2 )
 
 
-def main( nelems=16, reynolds=2e3, bump=Gauss(.75,.25,.25), strong=False, tol=1e-8, timestep=0 ):
+def main( nelems=16, reynolds=2e3, bump=Gauss(.25,.25,.25), strong=False, tol=1e-8, timestep=0 ):
 
   verts = numeric.linspace( 0, 1, nelems+1 )
   domain, geom = mesh.rectilinear( [verts,verts] )
@@ -105,7 +97,7 @@ def main( nelems=16, reynolds=2e3, bump=Gauss(.75,.25,.25), strong=False, tol=1e
     inertmat = domain.integrate( inertia, ischeme='gauss9', geometry=geom, title='adding inertia' )
     stokesmat += inertmat
 
-  lhs = stokesmat.solve( stokesrhs, constrain=cons, tol=1e-10, precon='spilu' )
+  lhs = stokesmat.solve( stokesrhs, constrain=cons, tol=0, precon='spilu' )
 
   for iiter in util.iterate():
     makeplots( domain, geom, vspace.dot(lhs), pspace.dot(lhs), iiter )
@@ -120,7 +112,7 @@ def main( nelems=16, reynolds=2e3, bump=Gauss(.75,.25,.25), strong=False, tol=1e
       log.info( 'residual:', res )
       if res < tol:
         break
-    lhs = matrix.solve( rhs, constrain=cons, tol=1e-10 )#, precon='spilu' )
+    lhs = matrix.solve( rhs, constrain=cons, tol=0 )#, precon='spilu' )
 
 
 #   lhs = stokesmat.solve( rhs, constrain=cons, tol=1e-10 )
