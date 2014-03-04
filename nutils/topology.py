@@ -1247,7 +1247,7 @@ def glue( master, slave, geometry, tol=1.e-10, verbose=False ):
   # convert element pairs to vertex map
   vtxmap = {}
   for masterelem, slave_elem in elempairs:
-    for oldvtx, newvtx in zip( slave_elem.vertices, reversed(masterelem.vertices) ):
+    for oldvtx, newvtx in zip( slave_elem.vertices, masterelem.vertices ):
       assert vtxmap.setdefault( oldvtx, newvtx ) == newvtx, 'conflicting vertex info'
 
   emap = {} # elem->newelem map
@@ -1265,7 +1265,7 @@ def glue( master, slave, geometry, tol=1.e-10, verbose=False ):
   _wrapelem = lambda elem: emap.get(elem,elem)
   def _wraptopo( topo ):
     elems = map( _wrapelem, topo )
-    return UnstructuredTopology( elems, ndims=topo.ndims ) if not isinstance( topo, UnstructuredTopology ) \
+    return UnstructuredTopology( elems, ndims=topo.ndims ) if not isinstance( topo, StructuredTopology ) \
       else StructuredTopology( numeric.asarray(elems).reshape(slave.structure.shape) )
 
   # generate glued topology

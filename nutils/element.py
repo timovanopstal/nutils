@@ -842,7 +842,7 @@ class QuadElement( Element ):
         coords = numeric.array([[0,1]]).T
       elif ndims == 2:
         eps = 0 if not len(where[3:]) else float(where[3:]) # subdivision fix (avoid extraordinary point)
-        coords = numeric.array([[eps,eps],[1-eps,eps],[1-eps,1-eps],[eps,1-eps]])
+        coords = numeric.array([[eps,eps],[eps,1-eps],[1-eps,eps],[1-eps,1-eps]])
       elif ndims == 3:
         coords = numeric.array([ [0,0,0], [1,0,0], [0,1,0], [1,1,0], [0,0,1], [1,0,1], [0,1,1], [1,1,1] ])
       else:
