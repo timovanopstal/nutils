@@ -1210,18 +1210,17 @@ class HierarchicalTopology( Topology ):
   def splinefunc( self, *args, **kwargs ):
     return self._funcspace( lambda topo: topo.splinefunc( *args, **kwargs ) )
 
-def glue( master, slave, geometry, tol=1.e-10, verbose=False ):
+def glue( master, slave, geometry, tol=1.e-10, gluekey='__glue__' ):
   'Glue topologies along boundary group __glue__.'
   log.context('glue')
 
-  gluekey = '__glue__'
-
-  # Checks on input
+  # checks on input
   assert gluekey in master.boundary.groups and \
          gluekey in slave.boundary.groups, 'Must identify glue boundary first.'
   assert len(master.boundary[gluekey]) == \
-          len(slave.boundary[gluekey]), 'Minimum requirement is that cardinality is equal.'
-  assert master.ndims == 2 and slave.ndims == 2, '1D boundaries for now.' # see dists computation and update_vertices
+         len(slave.boundary[gluekey]), 'Minimum requirement is that cardinality is equal.'
+  assert master.ndims == slave.ndims == 2 and \
+         all([isinstance(e,element.QuadElement) for e in master+slave]), '1D boundaries of quadrilaterals for now.' # see dists computation and update_vertices
 
   _mg, _sg = geometry if isinstance( geometry, tuple ) else (geometry,) * 2
   master_geom = _mg.compiled()
@@ -1231,23 +1230,29 @@ def glue( master, slave, geometry, tol=1.e-10, verbose=False ):
   assert len(slave.boundary[gluekey]) == nglue
 
   log.info( 'pairing elements [%i]' % nglue )
-  masterelems = [ ( masterelem, master_geom.eval( masterelem, 'gauss1' )[0] ) for masterelem in master.boundary[gluekey] ]
+  masterelems = [ ( masterelem, master_geom.eval( masterelem, 'vtk' ) ) for masterelem in master.boundary[gluekey] ]
   elempairs = []
   maxdist = 0
   for slaveelem in slave.boundary[gluekey]:
-    slavepoint = slave_geom.eval( slaveelem, 'gauss1' )[0]
-    distances = [ numeric.norm2( masterpoint - slavepoint ) for masterelem, masterpoint in masterelems ]
+    slavepoint = slave_geom.eval( slaveelem, 'vtk' )
+    distances, directions = [], []
+    for masterelem, masterpoint in masterelems:
+      dist_fwd = max( numeric.norm2( masterpoint - slavepoint ) )
+      dist_rev = max( numeric.norm2( masterpoint - slavepoint[::-1] ) )
+      reverse = dist_rev < dist_fwd
+      distances.append( dist_rev if reverse else dist_fwd )
+      directions.append( -1 if reverse else 1 )
     i = numeric.numpy.argmin( distances )
     maxdist = max( maxdist, distances[i] )
-    elempairs.append(( masterelems.pop(i)[0], slaveelem ))
+    elempairs.append(( masterelems.pop(i)[0], slaveelem, directions[i] ))
   assert not masterelems
   assert maxdist < tol, 'maxdist exceeds tolerance: %.2e >= %.2e' % ( maxdist, tol )
   log.info( 'all elements matched within %.2e radius' % maxdist )
 
   # convert element pairs to vertex map
   vtxmap = {}
-  for masterelem, slave_elem in elempairs:
-    for oldvtx, newvtx in zip( slave_elem.vertices, masterelem.vertices ):
+  for masterelem, slave_elem, direction in elempairs:
+    for oldvtx, newvtx in zip( slave_elem.vertices, masterelem.vertices[::direction] ):
       assert vtxmap.setdefault( oldvtx, newvtx ) == newvtx, 'conflicting vertex info'
 
   emap = {} # elem->newelem map
@@ -1266,7 +1271,7 @@ def glue( master, slave, geometry, tol=1.e-10, verbose=False ):
   def _wraptopo( topo ):
     elems = map( _wrapelem, topo )
     return UnstructuredTopology( elems, ndims=topo.ndims ) if not isinstance( topo, StructuredTopology ) \
-      else StructuredTopology( numeric.asarray(elems).reshape(slave.structure.shape) )
+      else StructuredTopology( numeric.asarray(elems).reshape(topo.structure.shape) )
 
   # generate glued topology
   elems = list( master ) + map( _wrapelem, slave )
