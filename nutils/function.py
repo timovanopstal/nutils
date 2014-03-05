@@ -1,6 +1,5 @@
 from . import util, cache, numeric, transform, log, prop, _
 import sys, warnings
-
 ELEM    = object()
 POINTS  = object()
 WEIGHTS = object()
@@ -50,6 +49,29 @@ class CompiledEvaluable( object ):
     'evaluate'
 
     if isinstance( ischeme, dict ):
+      if ischeme.has_key( 'adaptive' ):
+        def defaultloc( val ):
+          return val if isinstance( val, numeric.NumericArray ) else \
+                 val[-1] if isinstance( val[-1], numeric.NumericArray ) else \
+                 val[-1][-1] if isinstance( val[-1][-1], numeric.NumericArray ) else \
+                 val[-1][-1][-1] if isinstance( val[-1][-1][-1], numeric.NumericArray ) else \
+                 val[-1][-1][-1][-1] if isinstance( val[-1][-1][-1][-1], numeric.NumericArray ) else \
+                 ValueError( 'No NumericArray encountered, supply in ischeme' )
+        base_ischeme = ischeme['adaptive']
+        qmin = ischeme.get( 'qmin', 0 )
+        qmax = ischeme.get( 'qmax', 17 )
+        step = ischeme.get( 'step', 2 )
+        TOL = ischeme.get( 'TOL', 1.e-5 )
+        retvals = [self.eval( elem, base_ischeme%qmin )]
+        locate = ischeme.get( 'locate', defaultloc )
+        for q in range( qmin+step, qmax, step ):
+          retvals.append( self.eval( elem, base_ischeme%q ) )
+          err = numeric.norm2((locate(retvals[-2])-locate(retvals[-1])).ravel())
+          if err<TOL: break
+        f = open( 'tmp.txt', 'a' )
+        f.write( '%i '%q )
+        f.close()
+        return retvals[-1]
       ischeme = ischeme[elem]
 
     if isinstance( ischeme, str ):
