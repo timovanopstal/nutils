@@ -209,10 +209,11 @@ class TestShearFlow( object ):
 
   def test_SubdivisionGeometry( self, visual=False, case='sphere' ):
     'Interior Dirichlet on approximate sphere with subdivision surfaces.'
-    ischemes = {'F':'gauss%i'%(4 if case=='sphere' else 16), 'K':'singular3', 'V':'singular3'}
+    tol = 1e-2 if case=='sphere' else 7e-2
+    adaptive = 'singular3' # {'adaptive':'singular%i', 'qmin':2, 'qmax':17, 'step':2, 'TOL':1.e-5}
+    ischemes = {'F':'gauss4', 'K':adaptive, 'V':adaptive}
     inputfile( case=case )
     domain, coords = mesh.blender( '%s.sdv'%case )
-    tol = 1e-2 if case=='sphere' else 7e-2
     self._bemtest( domain, coords, ischemes, tol=tol, visual='./%s.vtu'%case if visual else False )
 
 def main():
