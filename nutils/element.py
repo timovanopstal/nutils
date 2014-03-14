@@ -1614,7 +1614,7 @@ class CatmullClarkElem( StdElem ):
       X[0,:,:] = X0
       X[1,:,:] = X1
       X[2,:,:] = X2
-
+ 
     return X
 
   @staticmethod
@@ -1774,9 +1774,276 @@ class CatmullClarkElem( StdElem ):
           result[lk_indices,] = coeff * numeric.dot( temp0, temp1 ).swapaxes(0,1)
 
     else: # etype in (1,3)
-      temp = self.basepoly.eval( points, grad=grad ).swapaxes(0,1)
+      # TODO: includes two DIRTY hacks verified only for etype=3
+      newpoints = numeric.roll( points, 1, 1 ) if self.etype==3 and grad==0 else points
+      temp = self.basepoly.eval( newpoints, grad=grad ).swapaxes(0,1)
+      if self.etype==3 and grad==1: temp = temp.reshape(4,4,-1,2).swapaxes(0,1).reshape(16,-1,2)
       result = numeric.dot( X.T, temp ).swapaxes(0,1)
 
     return result
+
+  #----------------------------------------------------------------------------------------------------
+  @staticmethod
+  def X_tmp( n, etype ):
+    if etype == 1: # Interpolating corner
+      Q0 = [0,0,1,2,0,0,1,2,3,3,4,5,6,6,7,8]
+      X = numeric.zeros( (16, 9) )
+      for R in range(16):
+        X[ R,Q0[R] ] = 1
+      # Phantom points (9)
+      X[0,[0,1,3,4]] = 4,-2,-2,1
+      X[1,[0,3]] = 2,-1
+      X[2,[1,4]] = 2,-1
+      X[3,[2,5]] = 2,-1
+      X[4,[0,1]] = 2,-1
+      X[8,[3,4]] = 2,-1
+      X[12,[6,7]] = 2,-1
+
+    elif etype == 3: # Regular boundary
+      Q0 = [4,3,0,11,4,3,0,11,5,2,1,10,6,7,8,9]
+      X = numeric.zeros( (16, 12) )
+      for R in range(16):
+        X[ R,Q0[R] ] = 1;
+      # Phantom points (4)
+      X[0,[4,5]] = 2,-1
+      X[1,[3,2]] = 2,-1
+      X[2,[0,1]] = 2,-1
+      X[3,[11,10]] = 2,-1
+
+    elif etype >= 4: # Interior (both regular and extraordinary)
+      # These rows from Abar will be used
+      Q00 = 1 if n == 3 else 7
+      Q0 = [Q00, 6, 2*n + 4, 2*n + 12, 0, 5, 2*n + 3, 2*n + 11, 3, 4, 2*n + 2, 2*n + 10, 2*n + 6, 2*n + 5, 2*n + 1, 2*n + 9]
+      Q1 = [0, 5, 2*n + 3, 2*n + 11, 3, 4, 2*n + 2, 2*n + 10, 2*n + 6, 2*n + 5, 2*n + 1, 2*n + 9, 2*n + 15, 2*n + 14, 2*n + 13, 2*n + 8]
+      Q2 = [1, 0, 5, 2*n + 3, 2, 3, 4, 2*n + 2, 2*n + 7, 2*n + 6, 2*n + 5, 2*n + 1, 2*n + 16, 2*n + 15, 2*n + 14, 2*n + 13]
+      X = numeric.empty( [3, 16, 2*n+17] )
+      X0 = numeric.zeros( (16, 2*n+17) )
+      X1 = numeric.zeros( (16, 2*n+17) )
+      X2 = numeric.zeros( (16, 2*n+17) )
+      for R in range(16):
+        X0[ R, Q0[R] ] = 1;
+        X1[ R, Q1[R] ] = 1;
+        X2[ R, Q2[R] ] = 1;
+      X[0,:,:] = X0
+      X[1,:,:] = X1
+      X[2,:,:] = X2
+    #elif etype >= 4:
+    #
+    #  # Picking vectors
+    #  # Dit zijn de rijen die uit Abar worden gebruikt.
+    #  Q0 = [7, 6, 2*n + 4, 2*n + 12, 0, 5, 2*n + 3, 2*n + 11, 3, 4, 2*n + 2, 2*n + 10, 2*n + 6, 2*n + 5, 2*n + 1, 2*n + 9]
+    #  if n == 3:
+    #    Q0[0] = 1        
+    #  Q1 = [0, 5, 2*n + 3, 2*n + 11, 3, 4, 2*n + 2, 2*n + 10, 2*n + 6, 2*n + 5, 2*n + 1, 2*n + 9, 2*n + 15, 2*n + 14, 2*n + 13, 2*n + 8]
+    #  Q2 = [1, 0, 5, 2*n + 3, 2, 3, 4, 2*n + 2, 2*n + 7, 2*n + 6, 2*n + 5, 2*n + 1, 2*n + 16, 2*n + 15, 2*n + 14, 2*n + 13]
+    #  
+    #  X = numpy.empty( [3, 16, 2*n+17] )
+    #  X0 = numpy.zeros( (16, 2*n+17) )
+    #  X1 = numpy.zeros( (16, 2*n+17) )
+    #  X2 = numpy.zeros( (16, 2*n+17) )
+    #  
+    #  for R in range(16):
+    #    X0[ R, Q0[R] ] = 1;
+    #    X1[ R, Q1[R] ] = 1;
+    #    X2[ R, Q2[R] ] = 1;
+    #  
+    #  X[0,:,:] = X0
+    #  X[1,:,:] = X1
+    #  X[2,:,:] = X2
+
+    #'''
+    ## Interpolating corner
+    #if etype == 1:
+    #  Q0 = [0,0,1,2,0,0,1,2,3,3,4,5,6,6,7,8]
+    #  #Q0 = [1,1,2,3,1,1,2,3,4,4,5,6,7,7,8,9]-1
+    #  X = numpy.zeros( (16, 9) ) 
+    #  
+    #  for R in range(16):
+    #    X[ R,Q0[R] ] = 1;
+    #  
+    #  # Phantom points (9)
+    #  X[0,[0,1,3,4]] = 4,-2,-2,1
+    #  X[1,[0,3]] = 2,-1
+    #  X[2,[1,4]] = 2,-1
+    #  X[3,[2,5]] = 2,-1
+    #  X[4,[0,1]] = 2,-1
+    #  X[8,[3,4]] = 2,-1
+    #  X[12,[6,7]] = 2,-1
+    #  
+    ## Regular boundary
+    #elif etype == 3:
+    #  Q0 = [4,3,0,11,4,3,0,11,5,2,1,10,6,7,8,9]
+    #  X = numpy.zeros( (16, 12) )
+    #  
+    #  for R in range(16):
+    #    X[ R,Q0[R] ] = 1;
+    #    
+    #  # Phantom points (4)      
+    #  X[0,[4,5]] = 2,-1
+    #  X[1,[3,2]] = 2,-1
+    #  X[2,[0,1]] = 2,-1
+    #  X[3,[11,10]] = 2,-1
+    #
+    ## Interior (both regular and extraordinary)
+    #elif etype >= 4:
+    #
+    #  # Picking vectors
+    #  # Dit zijn de rijen die uit Abar worden gebruikt.
+    #  Q0 = [7, 6, 2*n + 4, 2*n + 12, 0, 5, 2*n + 3, 2*n + 11, 3, 4, 2*n + 2, 2*n + 10, 2*n + 6, 2*n + 5, 2*n + 1, 2*n + 9]
+    #  if n == 3:
+    #    Q0[0] = 1        
+    #  Q1 = [0, 5, 2*n + 3, 2*n + 11, 3, 4, 2*n + 2, 2*n + 10, 2*n + 6, 2*n + 5, 2*n + 1, 2*n + 9, 2*n + 15, 2*n + 14, 2*n + 13, 2*n + 8]
+    #  Q2 = [1, 0, 5, 2*n + 3, 2, 3, 4, 2*n + 2, 2*n + 7, 2*n + 6, 2*n + 5, 2*n + 1, 2*n + 16, 2*n + 15, 2*n + 14, 2*n + 13]
+    #  
+    #  X = numpy.empty( [3, 16, 2*n+17] )
+    #  X0 = numpy.zeros( (16, 2*n+17) )
+    #  X1 = numpy.zeros( (16, 2*n+17) )
+    #  X2 = numpy.zeros( (16, 2*n+17) )
+    #  
+    #  for R in range(16):
+    #    X0[ R, Q0[R] ] = 1;
+    #    X1[ R, Q1[R] ] = 1;
+    #    X2[ R, Q2[R] ] = 1;
+    #  
+    #  X[0,:,:] = X0
+    #  X[1,:,:] = X1
+    #  X[2,:,:] = X2
+    #'''
+      
+    return X
+
+  def eval_bsplines( self, s, t, grad, direction ):
+    BSplineS = numpy.array([-s**3 + 3*s**2 - 3*s + 1, 3*s**3 - 6*s**2 + 4, -3*s**3 + 3*s**2 + 3*s + 1, s**3]) / 6.0
+    BSplineT = numpy.array([-t**3 + 3*t**2 - 3*t + 1, 3*t**3 - 6*t**2 + 4, -3*t**3 + 3*t**2 + 3*t + 1, t**3]) / 6.0
+    
+    dBSplineS = numpy.array([-3*s**2 + 6*s - 3, 9*s**2 - 12*s, -9*s**2 + 6*s + 3, 3*s**2]) / 6.0
+    dBSplineT = numpy.array([-3*t**2 + 6*t - 3, 9*t**2 - 12*t, -9*t**2 + 6*t + 3, 3*t**2]) / 6.0
+    
+    ddBSplineS = numpy.array([ -6*s + 6, 18*s - 12, -18*s + 6, 6*s ]) / 6.0
+    ddBSplineT = numpy.array([ -6*t + 6, 18*t - 12, -18*t + 6, 6*t ]) / 6.0
+    
+    if grad == 0:
+      BSplineST = ( BSplineT[:,_] * BSplineS[_,:] ).reshape(16)
+      
+    elif grad == 1:
+      if direction == 0:
+        # S
+        BSplineST = ( BSplineT[:,_] * dBSplineS[_,:] ).reshape(16)
+      elif direction == 1:
+        # T
+        BSplineST = ( dBSplineT[:,_] * BSplineS[_,:] ).reshape(16)
+      
+    elif grad == 2:
+      if direction == 0:
+        # SS
+        BSplineST = ( BSplineT[:,_] * ddBSplineS[_,:] ).reshape(16)
+      elif direction == 1:
+        # ST of TS
+        BSplineST = ( dBSplineT[:,_] * dBSplineS[_,:] ).reshape(16)
+      elif direction == 2:
+        # TT
+        BSplineST = ( ddBSplineT[:,_] * BSplineS[_,:] ).reshape(16)
+    
+    return BSplineST
+    
+  def eval_tmp( self, points, grad=0 ):
+    X = self.X(self.valence,self.etype)
+    if self.etype >= 4:
+      result = numpy.empty( [ numpy.size(points,0), 2*self.valence+8] + [2]*grad )
+      Abar = self.Abar(self.valence,self.etype)
+      A = Abar[:2*self.valence+8]
+    
+      for p in range(numpy.size(points,0)):
+    
+        u = points[p,0]
+        v = points[p,1] 
+        
+        m = max(u,v)
+        
+        if m == 0.:
+          # Limitpoint!
+          # S = self.Vinv[0].sum() is gelijk aan 1/Self.V[0,0]
+          # Niet nodig als de eerste eigenvector gelijk is aan [1,1,...,1].T
+          
+          if grad == 0:
+            # Voor het geval dat V[0,0] niet gelijk is aan 1:
+            result[p,:] = self.LimitStencil(self.valence,self.etype) #self.Vinv[0] * self.V[0,0]          
+            ''' Als grad > 0, is het resultaat 0. Dat komt omdat de afgeleiden van de B-splines een 
+                partition of nullity vormen (is dat altijd zo met POU functies)? '''          
+          else:
+            # TODO Exception
+            #print("Een grad > 0 in (0,0)")
+            result[:] = numpy.nan
+          
+        else:
+          # l = level
+          l = int( numpy.floor(-numpy.log2(m))+1 )
+          
+          ubar = 2**(l-1)*u
+          vbar = 2**(l-1)*v
+          
+          if vbar < .5:
+            k = 0
+            s = 2*ubar-1
+            t = 2*vbar
+          elif ubar > .5:
+            k = 1
+            s = 2*ubar-1
+            t = 2*vbar-1
+          else:
+            k = 2
+            s = 2*ubar
+            t = 2*vbar-1
+            
+          # Efficienter implementeren  
+          if grad == 0:
+            result[p,:] = numpy.dot( numpy.linalg.matrix_power(A, (l-1)).T, numpy.dot( Abar.T, numpy.dot( X[k,:,:].T, self.eval_bsplines(s,t,grad,-1) ) ) )
+          elif grad == 1:
+            result[p,:,0] = 2**l * numpy.dot( numpy.linalg.matrix_power(A, (l-1)).T, numpy.dot( Abar.T, numpy.dot( X[k,:,:].T, self.eval_bsplines(s,t,grad,0) ) ) )
+            result[p,:,1] = 2**l * numpy.dot( numpy.linalg.matrix_power(A, (l-1)).T, numpy.dot( Abar.T, numpy.dot( X[k,:,:].T, self.eval_bsplines(s,t,grad,1) ) ) )
+          elif grad == 2:
+            result[p,:,0,0] = 2**(2*l) * numpy.dot( numpy.linalg.matrix_power(A, (l-1)).T, numpy.dot( Abar.T, numpy.dot( X[k,:,:].T, self.eval_bsplines(s,t,grad,0) ) ) )
+            result[p,:,0,1] = 2**(2*l) * numpy.dot( numpy.linalg.matrix_power(A, (l-1)).T, numpy.dot( Abar.T, numpy.dot( X[k,:,:].T, self.eval_bsplines(s,t,grad,1) ) ) )
+            result[p,:,1,0] = 2**(2*l) * numpy.dot( numpy.linalg.matrix_power(A, (l-1)).T, numpy.dot( Abar.T, numpy.dot( X[k,:,:].T, self.eval_bsplines(s,t,grad,1) ) ) )
+            result[p,:,1,1] = 2**(2*l) * numpy.dot( numpy.linalg.matrix_power(A, (l-1)).T, numpy.dot( Abar.T, numpy.dot( X[k,:,:].T, self.eval_bsplines(s,t,grad,2) ) ) )
+    
+    # etype = 1 of etype = 3
+    else:
+      if self.etype == 1:
+        result = numpy.empty( [ numpy.size(points,0), 9] + [2]*grad )
+      elif self.etype == 3:
+        result = numpy.empty( [ numpy.size(points,0), 12] + [2]*grad )
+    
+      for p in range(numpy.size(points,0)):
+    
+        u = points[p,0]
+        v = points[p,1]
+        
+        # Geen factoren voor de afgeleiden nodig! Oftewel, l=0 voor de hele patch.
+    
+        if grad == 0:
+          # old = self.eval_bsplines(u,v,grad,-1)
+          # new = self.basepoly.eval(numpy.array([v,u]),grad) # u,v swap
+          # print 'grad=0, err: ', numpy.linalg.norm(old-new)
+          result[p,:] = numpy.dot( X.T, self.eval_bsplines(u,v,grad,-1) )
+        elif grad == 1:
+          # err = []
+          # for i in range(2):
+          #   old = self.eval_bsplines(u,v,grad,i)
+          #   new = self.basepoly.eval(numpy.array([u,v]),grad)[...,i].reshape(4,4).T.flatten() # sort
+          #   err.append( numpy.linalg.norm(old-new) )
+          # print 'grad=1, err: ', err
+          result[p,:,0] = numpy.dot( X.T, self.eval_bsplines(u,v,grad,0) )
+          result[p,:,1] = numpy.dot( X.T, self.eval_bsplines(u,v,grad,1) )
+        elif grad == 2:
+          result[p,:,0,0] = numpy.dot( X.T, self.eval_bsplines(u,v,grad,0) )
+          result[p,:,0,1] = numpy.dot( X.T, self.eval_bsplines(u,v,grad,1) )
+          result[p,:,1,0] = numpy.dot( X.T, self.eval_bsplines(u,v,grad,1) )
+          result[p,:,1,1] = numpy.dot( X.T, self.eval_bsplines(u,v,grad,2) )
+    temp_result = self.eval_tmp( points, grad )
+    err = numpy.linalg.norm(temp_result-result)
+    if err>1.e-10: print 'err: ', err, self.valence, self.etype, grad
+                  
+    return temp_result # numeric.array( result )
 
 # vim:shiftwidth=2:foldmethod=indent:foldnestmax=2
