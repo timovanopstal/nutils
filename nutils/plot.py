@@ -341,7 +341,7 @@ class PyPlot( BasePlot ):
     assert data.ndim == 2
     self.imshow( data.T, extent=(xlim[0],xlim[-1],ylim[0],ylim[-1]), origin='lower' )
 
-  def cspy( self, A, **kwargs ): 
+  def cspy( self, A, cutoff=0, **kwargs ): 
     'Like pyplot.spy, but coloring acc to 10^log of absolute values, where [0, inf, nan] show up in blue.'
     if not isinstance( A, numpy.ndarray ):
       A = A.toarray()
@@ -351,6 +351,7 @@ class PyPlot( BasePlot ):
       A = numpy.log10( numpy.abs( A ) )
       B = numpy.isinf( A ) | numpy.isnan( A ) # what needs replacement
       A[B] = ~B if numpy.all( B ) else numpy.amin( A[~B] ) - 1.
+    if cutoff: A = numpy.maximum( A, numpy.amax(A)-cutoff )
     self.pcolormesh( A, **kwargs )
     self.colorbar()
     self.ylim( self.ylim()[-1::-1] ) # invert y axis: equiv to MATLAB axis ij
