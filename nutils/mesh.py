@@ -1,4 +1,4 @@
-from . import topology, function, util, element, numpy, numeric, _
+from . import topology, function, util, element, numpy, numeric, _, log
 import os
 
 # MESH GENERATORS
@@ -192,6 +192,7 @@ def gmesh( path, btags={}, name=None ):
       pass
     topo.boundary.groups[tag] = topology.UnstructuredTopology( group, ndims=1 )
 
+  log.info( 'gmesh importer: #elems = %i' % len(topo) )
   return topo, function.ElemFunc( domainelem )
 
 def triangulation( vertices, nvertices ):
