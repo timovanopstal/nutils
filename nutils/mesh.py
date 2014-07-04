@@ -110,8 +110,6 @@ def gmesh( path, btags={}, name=None ):
   boundary = []
   elements = []
   connected = [ set() for i in range( nvertices ) ]
-  nmap = {}
-  fmap = {}
 
   assert lines.next() == '$Elements\n'
   domainelem = element.Element( ndims=2, vertices=[] )
@@ -131,14 +129,10 @@ def gmesh( path, btags={}, name=None ):
       if elemtype == 2: # interior element, triangle
         parent = domainelem, element.AffineTransformation( offset=elemcoords[2], transform=(elemcoords[:2]-elemcoords[2]).T )
         elem = element.TriangularElement( vertices=elemvertexobjs, parent=parent )
-        stdelem = element.PolyTriangle( 1 )
       else: # interior element, quadrilateral
         raise NotImplementedError
         elem = element.QuadElement( ndims=2 )
-        stdelem = element.PolyQuad( (2,2) )
       elements.append( elem )
-      fmap[ elem ] = stdelem
-      nmap[ elem ] = elemvertices
       for n in elemvertices:
         connected[ n ].add( elem )
     elif elemtype == 15: # boundary vertex
@@ -167,21 +161,7 @@ def gmesh( path, btags={}, name=None ):
       numpy.warnings.warn( 'Boundary elements are not sorted: boundary group will be an UnstructuredTopology.' )
       break
 
-  linearfunc = function.function( fmap, nmap, nvertices, 2 )
-  # Extend linearfunc by bubble functions for the P^1+bubble basis
-  fmap_b, nmap_b = {}, {}
-  for i, (key,val) in enumerate( nmap.iteritems() ): # enumerate bubble functions
-    fmap_b[key] = element.BubbleTriangle( 1 )
-    nmap_b[key] = numpy.concatenate( [val, [nvertices+i]] )
-  bubblefunc = function.function( fmap_b, nmap_b, nvertices+len(nmap), 2 )
-  # Extend linearfunc to discontinuous linear basis
-  nmap_d = {}
-  for i, key in enumerate( nmap.iterkeys() ):
-    nmap_d[key] = 3*i+numpy.arange(3)
-  discontfunc = function.function( fmap, nmap_d, 3*len(nmap), 2 )
-
-  namedfuncs = { 'spline1':linearfunc, 'bubble1':bubblefunc, 'discont1':discontfunc }
-  topo = topology.UnstructuredTopology( elements, ndims=2, namedfuncs=namedfuncs )
+  topo = topology.UnstructuredTopology( elements, ndims=2 )
   topo.boundary = topology.StructuredTopology( belements, periodic=(0,) ) if structured else \
                   topology.UnstructuredTopology( belements, ndims=1 )
   topo.boundary.groups = {}

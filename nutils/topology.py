@@ -574,6 +574,33 @@ class Topology( object ):
 
     return [ trimmededge for elem in self for trimmededge in elem.get_trimmededges( maxrefine ) ]
 
+  @core.cache
+  def discontfunc( self, degree ):
+    'discontinuous shape functions'
+
+    if isinstance( degree, int ):
+      degree = ( degree, ) * self.ndims
+
+    dof = 0
+    dofmap, funcmap = {}, {}
+    PolyQuad = util.product( element.PolyLine( element.PolyLine.bernstein_poly( d ) ) for d in degree )
+    stdelem = {element.QuadElement: PolyQuad, 
+         element.TriangularElement: element.PolyTriangle(1)}
+    for elem in self:
+      etype = type(elem)
+      if etype is element.QuadElement:
+        ldof = numpy.product(numpy.array(degree)+1)
+      elif etype is element.TriangularElement:
+        assert degree==1
+        ldof = 3
+      else:
+        raise NotImplementedError( 'Discontinuous functions not yet supported for element type %s' % type(elem) )
+      funcmap[elem] = stdelem[etype]
+      dofmap[elem] = numpy.arange( dof, dof+ldof )
+      dof += ldof
+
+    return function.function( funcmap, dofmap, dof, self.ndims )
+
 class StructuredTopology( Topology ):
   'structured topology'
 
@@ -747,21 +774,6 @@ class StructuredTopology( Topology ):
       dofmap = dict( ( elem, renumber[dofs]-1 ) for elem, dofs in dofmap.iteritems() )
 
     return function.function( funcmap, dofmap, dofcount, self.ndims )
-
-  @core.cache
-  def discontfunc( self, degree ):
-    'discontinuous shape functions'
-
-    if isinstance( degree, int ):
-      degree = ( degree, ) * self.ndims
-
-    dofs = numpy.arange( numpy.product(numpy.array(degree)+1) * len(self) ).reshape( len(self), -1 )
-    dofmap = dict( zip( self, dofs ) )
-
-    stdelem = util.product( element.PolyLine( element.PolyLine.bernstein_poly( d ) ) for d in degree )
-    funcmap = dict( numpy.broadcast( self.structure, stdelem ) )
-
-    return function.function( funcmap, dofmap, dofs.size, self.ndims )
 
   @core.cache
   def curvefreesplinefunc( self ):
@@ -1005,17 +1017,27 @@ class UnstructuredTopology( Topology ):
   def linearfunc( self ):
     'linear func'
 
-    return self.splinefunc( degree=1 )
+    vertices = list( set( v for elem in self for v in elem.vertices ) )
+    PolyQuad = util.product( (element.PolyLine( element.PolyLine.bernstein_poly( 1 ) ),)*self.ndims )
+    stdelem = {element.QuadElement: PolyQuad, 
+         element.TriangularElement: element.PolyTriangle(1)}
+    dofmap, funcmap = {}, {}
+    for elem in self:
+      funcmap[elem] = stdelem[type(elem)]
+      dofmap[elem] = numpy.array( [vertices.index(v) for v in elem.vertices] )
+    return function.function( funcmap, dofmap, len(vertices), self.ndims )
 
   def bubblefunc( self ):
     'linear func + bubble'
 
-    return self.namedfuncs[ 'bubble1' ]
-
-  def discontfunc( self ):
-    'discontinuous linear func'
-
-    return self.namedfuncs[ 'discont1' ]
+    linears = self.linearfunc()
+    length = linears.length
+    stdelem = element.BubbleTriangle(1)
+    funcmap, dofmap = {}, {}
+    for i, (key,val) in enumerate( linears.dofmap.dofmap.iteritems() ):
+      funcmap[key] = stdelem
+      dofmap[key] = numpy.concatenate( [val, [length+i]] )
+    return function.function( funcmap, dofmap, length+len(self), 2 )
 
   @property
   @core.weakcache
