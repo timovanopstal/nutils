@@ -1674,7 +1674,7 @@ class PolyTriangle( StdElem ):
   '''poly triangle (linear for now)
      conventions: dof numbering as vertices, see TriangularElement docstring.'''
 
-  __slots__ = ()
+  __slots__ = 'ndims', 'nshapes'
 
   @core.cache
   def __new__( cls, order ):
@@ -1682,6 +1682,8 @@ class PolyTriangle( StdElem ):
 
     assert order == 1
     self = object.__new__( cls )
+    self.ndims = 2
+    self.nshapes = 3
     return self
 
   @core.cache
