@@ -174,6 +174,13 @@ class DenseSubMatrix( Matrix ):
     self.data[ self.indices ] += other
     return self
 
+  def __imul__( self, other ):
+    'in place addition'
+
+    assert self.shape == other.shape
+    self.data[ self.indices ] *= other
+    return self
+
 class SparseMatrix( Matrix ):
   'sparse matrix'
 
@@ -463,6 +470,13 @@ class DenseMatrix( Matrix ):
 
     assert self.shape == other.shape
     self.data += other.toarray()
+    return self
+
+  def __imul__( self, other ):
+    'in place addition'
+
+    assert self.shape == other.shape
+    self.data *= other.toarray()
     return self
 
   def __isub__( self, other ):
