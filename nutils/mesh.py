@@ -68,7 +68,7 @@ def rectilinear( richshape, periodic=(), name='rect' ):
     geom = ( funcsp * coords ).sum()
   return topo, geom
 
-def gmesh( fname, tags={}, name=None, use_elementary=False ):
+def gmesh( fname, tags={}, name=None, use_elementary=False, sort=False ):
   """Gmesh parser
 
   Parser for Gmesh files in `.msh` format. See the `Gmesh manual <http://geuz.org/gmsh/doc/texinfo/gmsh.html>`_ for details.
@@ -78,6 +78,7 @@ def gmesh( fname, tags={}, name=None, use_elementary=False ):
       tags (dict, optional): Dictionary mapping gmesh group IDs to names
       name (str, optional): Name of parsed topology, defaults to None
       use_elementary (bool, optional): Option to indicate whether Gmsh is used with elementary groups only (i.e. no physical groups are defined), defaults to False
+      sort (bool, optional): Attempt to sort edges
 
   Returns:
       topo (:class:`nutils.topology.Topology`): Topology of parsed Gmesh file
@@ -177,7 +178,10 @@ def gmesh( fname, tags={}, name=None, use_elementary=False ):
   for group, grouptopo in elemgroups.items():
     topo[group] = topology.Topology( grouptopo )
 
-  topo.set_boundary( topology.Topology( edges.values() ) )
+  sort = edgesort if sort else lambda elems: topology.Topology( elems )
+  topo.set_boundary( sort( edges.values() ) )
+  if isinstance( topo.boundary, topology.StructuredTopology ): # add edge flips from edgesort()
+    edges = dict( (tuple(sorted(edge.vertices)), edge) for edge in topo.boundary )
   for group, edgekeys in edgegroups.items():
     topo.boundary[group] = topology.Topology([ edges[edgekey] for edgekey in edgekeys ])
 
@@ -346,6 +350,33 @@ def fromfunc( func, nelems, ndims, degree=1 ):
   funcsp = topo.splinefunc( degree=degree ).vector( ndims )
   coords = topo.projection( func, onto=funcsp, coords=ref, exact_boundaries=True )
   return topo, coords
+
+def edgesort( belems ):
+  'Attempt an edge sort to create (periodic) 1D StructuredTopology'
+  vertices = [vert for edge in belems for vert in edge.vertices]
+  N = len(belems)
+  boundary = [(0,1)]
+  for e0, l0 in boundary: # old elem and local vertex no.
+    g0 = vertices[2*e0+l0] # old global vertex no.
+    try:
+      i1 = vertices[:2*e0].index(g0) # search before element e0
+    except ValueError:
+      i1 = vertices[2*e0+2:].index(g0) # search after element e0
+      i1 += 2*e0+2
+    except ValueError:
+      break # failed to find next element
+    e1, l1 = i1//2, (i1+1)%2 # new elem and local vertex no.
+    if e1 in [k for k,v in boundary]: break # element occurs twice, disjoint domain
+    boundary.append( (e1,l1) )
+    if len(boundary) == N:
+      flip = lambda v: transform.affine(offset=[{0:1,1:0}[v]],linear=[[{0:-1,1:1}[v]]])
+      elem = lambda k, v: element.Element( belems[k].reference, belems[k].transform << flip(v) )
+      structure = [elem( k, v ) for k, v in boundary]
+      periodic = (0,) if vertices[0] == vertices[2*e1+l1] else ()
+      log.info( 'topo.boundary is structured', 'and periodic' if periodic else '' )
+      return topology.StructuredTopology( structure, periodic )
+  log.info( 'topo.boundary is unstructured (edge sort failed)' )
+  return topology.Topology( belems )
 
 def demo( xmin=0, xmax=1, ymin=0, ymax=1 ):
   'demo triangulation of a rectangle'
