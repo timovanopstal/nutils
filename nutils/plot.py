@@ -25,6 +25,9 @@ def _nansplit( data ):
   N = numpy.concatenate( [ [-1], n, [data.shape[0]] ] )
   return [ data[a:b] for a, b in zip( N[:-1]+1, N[1:] ) ]
 
+def _nanfilter( data ):
+  return data[~numpy.isnan( data.reshape( data.shape[0], -1 ) ).all( axis=1 )]
+
 class BasePlot( object ):
   'base class for plotting objects'
 
@@ -443,10 +446,10 @@ class DataFile( BasePlot ):
     self.fout.close()
 
   def printline( self, line ):
-    print >> self.fout, line 
+    print(line,file=self.fout)
 
   def printlist( self, lst, delim=' ', start='', stop='' ):
-    print >> self.fout, start + delim.join(str(s) for s in lst)  + stop
+    print(start + delim.join(str(s) for s in lst)  + stop,file=self.fout) 
 
 class VTKFile( BasePlot ):
   'vtk file'
@@ -556,7 +559,12 @@ class VTKFile( BasePlot ):
   def pointdataarray( self, name, data ):
     'add cell array'
     npoints = self.vtkMesh.GetNumberOfPoints()
+
+    if npoints != data.shape[0]:
+      data = _nanfilter( data )
+
     assert npoints == data.shape[0], 'Point data array should have %d entries' % npoints
+
     self.vtkMesh.GetPointData().AddArray( self.__vtkarray(name,data) )
 
   def __vtkarray( self, name, data ):
