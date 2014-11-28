@@ -417,7 +417,10 @@ class PyPlot( BasePlot ):
     else:
       A = numpy.log10( numpy.abs( A ) )
       B = numpy.isinf( A ) | numpy.isnan( A ) # what needs replacement
-      A[B] = ~B if numpy.all( B ) else numpy.amin( A[~B] ) - 1.
+      if numpy.all( B ):
+        A = ~B
+      else:
+        A[B] = numpy.amin( A[~B] ) - 1.
     self.pcolormesh( A, **kwargs )
     self.colorbar()
     self.ylim( self.ylim()[-1::-1] ) # invert y axis: equiv to MATLAB axis ij
