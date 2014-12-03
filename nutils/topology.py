@@ -48,8 +48,7 @@ class Topology( object ):
   def boundary( self ):
     if not self.__boundary:
       edges = {}
-      __log__ = log.iter( 'elem', self )
-      for elem in __log__:
+      for elem in log.iter( 'elem', self ):
         elemcoords = elem.vertices
         for iedge, iverts in enumerate( elem.reference.edge2vertices ):
           edgekey = tuple( sorted( c for c, n in zip( elemcoords, iverts ) if n ) )
@@ -169,8 +168,7 @@ class Topology( object ):
   @property
   def refine_iter( self ):
     topo = self
-    __log__ = log.count( 'refinement level' )
-    for irefine in __log__:
+    for irefine in log.count( 'refinement level' ):
       yield topo
       topo = topo.refined
 
@@ -275,8 +273,7 @@ class Topology( object ):
     pointshape = function.PointShape()
     npoints = 0
     separators = []
-    __log__ = log.iter( 'elem', self )
-    for elem in __log__:
+    for elem in log.iter( 'elem', self ):
       np, = pointshape.eval( elem, ischeme )
       slices.append( slice(npoints,npoints+np) )
       npoints += np
@@ -303,11 +300,10 @@ class Topology( object ):
     idata = function.Tuple( idata )
     fcache = cache.CallDict()
 
-    __log__ = log.enumerate( 'elem', self )
-    for ielem, elem in parallel.pariter( __log__ ):
+    for ielem, elem in parallel.pariter( log.enumerate( 'elem', self ) ):
       s = slices[ielem],
       for ifunc, index, data in idata.eval( elem, ischeme, fcache ):
-        retvals[ifunc][s+index] += data
+        retvals[ifunc][s+numpy.ix_(*index)] += data
 
     log.debug( 'cache', fcache.summary() )
     log.info( 'created', ', '.join( '%s(%s)' % ( retval.__class__.__name__, ','.join( str(n) for n in retval.shape ) ) for retval in retvals ) )
@@ -407,8 +403,7 @@ class Topology( object ):
     # data_index is filled in the same loop. It does not use valuefunc data but
     # benefits from parallel speedup.
 
-    __log__ = log.enumerate( 'elem', self )
-    for ielem, elem in parallel.pariter( __log__ ):
+    for ielem, elem in parallel.pariter( log.enumerate( 'elem', self ) ):
       ipoints, iweights = fcache( elem.reference.getischeme, ischeme[elem] if isinstance(ischeme,dict) else ischeme )
       for iblock, intdata in enumerate( valuefunc.eval( elem, ipoints, fcache ) ):
         s = slice(*offsets[iblock,ielem:ielem+2])
@@ -580,18 +575,23 @@ class Topology( object ):
   def trim( self, levelset, maxrefine, eps=.01 ):
     'trim element along levelset'
 
-    numer = rational.round(1./eps)
+    numer = numeric.round(1./eps)
     poselems = []
+    postrims = []
     negelems = []
-    __log__ = log.iter( 'elem', self )
-    for elem in __log__:
+    negtrims = []
+    for elem in log.iter( 'elem', self ):
       pos, neg = elem.trim( levelset=levelset, maxrefine=maxrefine, numer=numer )
       if pos:
-        poselems.append( pos )
+        poselem, postrim = pos
+        poselems.append( poselem )
+        postrims.extend( poselem.findedge(trans) for trans in postrim )
       if neg:
-        negelems.append( neg )
-    return TrimmedTopology( self, poselems ), \
-           TrimmedTopology( self, negelems )
+        negelem, negtrim = neg
+        negelems.append( negelem )
+        negtrims.extend( negelem.findedge(trans) for trans in negtrim )
+    return TrimmedTopology( self, poselems, postrims, ndims=self.ndims ), \
+           TrimmedTopology( self, negelems, negtrims, ndims=self.ndims )
 
   def elem_project( self, funcs, degree, ischeme=None, check_exact=False ):
 
@@ -609,8 +609,7 @@ class Topology( object ):
     bases = {}
     extractions = [ [] for ifunc in range(len(funcs) ) ]
 
-    __log__ = log.iter( 'elem', self )
-    for elem in __log__:
+    for elem in log.iter( 'elem', self ):
 
       try:
         points, projector, basis = bases[ elem.reference ]
@@ -645,6 +644,17 @@ class Topology( object ):
 
     return extractions
 
+  @log.title
+  def volume( self, geometry, ischeme='gauss1' ):
+    return self.integrate( 1, geometry=geometry, ischeme=ischeme )
+
+  @log.title
+  def volume_check( self, geometry, ischeme='gauss1', decimal=15 ):
+    volume = self.volume( geometry, ischeme )
+    zeros, volumes = self.boundary.integrate( [ geometry.normal(), geometry * geometry.normal() ], geometry=geometry, ischeme=ischeme )
+    numpy.testing.assert_almost_equal( zeros, 0., decimal=decimal )
+    numpy.testing.assert_almost_equal( volumes, volume, decimal=decimal )
+    return volume
 
 def UnstructuredTopology( elems, ndims ):
   return Topology( elems )
@@ -1209,7 +1219,6 @@ class HierarchicalTopology( Topology ):
     return HierarchicalTopology( self.basetopo, poselems ), \
            HierarchicalTopology( self.basetopo, negelems )
 
-
 class RefinedTopology( Topology ):
   'refinement'
 
@@ -1228,10 +1237,10 @@ class RefinedTopology( Topology ):
 class TrimmedTopology( Topology ):
   'trimmed'
 
-  def __init__( self, basetopo, elements, trimmed=[] ):
+  def __init__( self, basetopo, elements, trimmed=[], ndims=None ):
     self.basetopo = basetopo
     self.trimmed = tuple(trimmed)
-    Topology.__init__( self, elements )
+    Topology.__init__( self, elements, ndims )
 
   @cache.property
   def refined( self ):
@@ -1241,8 +1250,15 @@ class TrimmedTopology( Topology ):
 
   @cache.property
   def boundary( self ):
-    warnings.warn( 'warning: boundaries of trimmed topologies are not trimmed' )
-    belems = list( self.trimmed ) + [ belem for belem in self.basetopo.boundary if belem.transform.lookup(self.edict) ]
+    belems = list( self.trimmed )
+    for belem in self.basetopo.boundary:
+      trans = belem.transform
+      elem = self.edict.get( trans[:-1] )
+      if elem:
+        belem = elem.findedge( trans[-1:] )
+        if belem:
+          belems.append( belem )
+
     boundary = TrimmedTopology( self.basetopo.boundary, belems )
     if self.trimmed:
       boundary['trimmed'] = Topology( self.trimmed )

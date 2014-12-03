@@ -124,6 +124,9 @@ class PyPlot( BasePlot ):
         self.xy = xy
         self.tri = tri
         self._facecolors = numpy.zeros([numpy.max(tri)+1,4]) # fully transparent
+
+      def get_paths( self ):
+        return []
     
       @allow_rasterization
       def draw(self, renderer):
@@ -464,17 +467,24 @@ class VTKFile( BasePlot ):
 
     import vtk 
 
-    if self.name.lower().endswith('.vtu'):
+    if self.name.lower().endswith('.vtu') or self.name.lower().endswith('.vtr'):
       self.names = [self.name]
     else:  
       self.names = [self.name+'.vtu']
 
     self.ascii   = ascii
-    self.vtkMesh = vtk.vtkUnstructuredGrid()
+    self.vtkMesh = None
 
   def save( self, name ):
     import vtk
-    vtkWriter = vtk.vtkXMLUnstructuredGridWriter()
+    assert self.vtkMesh is not None
+    if isinstance(self.vtkMesh,vtk.vtkUnstructuredGrid ):
+      vtkWriter = vtk.vtkXMLUnstructuredGridWriter()
+    elif isinstance(self.vtkMesh,vtk.vtkRectilinearGrid ):
+      vtkWriter = vtk.vtkXMLRectilinearGridWriter()
+    else:
+      raise NotImplementedError()
+ 
     vtkWriter.SetInput   ( self.vtkMesh )
     vtkWriter.SetFileName( os.path.join( self.path, name ) )
     if self.ascii:
@@ -487,6 +497,7 @@ class VTKFile( BasePlot ):
 
     import vtk
 
+    self.vtkMesh = vtk.vtkUnstructuredGrid()
     vtkPoints = vtk.vtkPoints()
     vtkPoints.SetNumberOfPoints( sum(pts.shape[0] for pts in points) )
 
@@ -504,14 +515,26 @@ class VTKFile( BasePlot ):
 
     self.vtkMesh.SetPoints( vtkPoints )
 
+  def rectilineargrid( self, coords ):
+    """set rectilinear grid"""
+    assert len(coords)==3
+    import vtk
+
+    self.vtkMesh = vtk.vtkRectilinearGrid()
+    self.vtkMesh.SetDimensions( map( len, coords ) )
+    self.vtkMesh.SetXCoordinates( self.__vtkarray('X',coords[0]) )
+    self.vtkMesh.SetYCoordinates( self.__vtkarray('Y',coords[1]) )
+    self.vtkMesh.SetZCoordinates( self.__vtkarray('Z',coords[2]) )
+
   def unstructuredgrid( self, points, npars=None ):
-    """add unstructured grid"""
+    """set unstructured grid"""
 
     points = _nansplit( points )
     #assert isinstance( points, (list,tuple,numpy.ndarray) ), 'Expected list of point arrays'
 
     import vtk
 
+    self.vtkMesh = vtk.vtkUnstructuredGrid()
     vtkPoints = vtk.vtkPoints()
     vtkPoints.SetNumberOfPoints( sum(pts.shape[0] for pts in points) )
 
@@ -555,12 +578,14 @@ class VTKFile( BasePlot ):
 
   def celldataarray( self, name, data ):
     'add cell array'
+    assert self.vtkMesh is not None
     ncells = self.vtkMesh.GetNumberOfCells()
     assert ncells == data.shape[0], 'Cell data array should have %d entries' % ncells
     self.vtkMesh.GetCellData().AddArray( self.__vtkarray(name,data) )
 
   def pointdataarray( self, name, data ):
     'add cell array'
+    assert self.vtkMesh is not None
     npoints = self.vtkMesh.GetNumberOfPoints()
 
     if npoints != data.shape[0]:
@@ -743,8 +768,7 @@ class PylabAxis( object ):
     'quiver builder'
   
     xyuv = function.Concatenate( [ coords, quiver ] )
-    __log__ = log.iter( 'elem', topology )
-    XYUV = [ xyuv( elem, sample ) for elem in __log__ ]
+    XYUV = [ xyuv( elem, sample ) for elem in log.iter( 'elem', topology ) ]
     self.quiver( *numpy.concatenate( XYUV, 0 ).T, scale=scale )
 
   def add_graph( self, xfun, yfun, topology, sample='contour10', logx=False, logy=False, **kwargs ):

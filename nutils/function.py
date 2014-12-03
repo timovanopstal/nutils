@@ -78,18 +78,30 @@ class Evaluable( cache.Immutable ):
     myinds.append( indices )
     return tuple(myops[len(TOKENS):]), tuple(myinds)
 
-  def asciitree( self ):
+  def asciitree( self, seen=None ):
     'string representation'
 
-    key = str(self)
-    lines = []
-    indent = '\n' + ' ' + ' ' * len(key)
-    for it in reversed( self.__args ):
-      s = it.asciitree() if isinstance(it,Evaluable) else _obj2str(it)
-      lines.append( indent.join( s.splitlines() ) )
-      indent = '\n' + '|' + ' ' * len(key)
-    indent = '\n' + '+' + '-' * (len(key)-1) + ' '
-    return key + ' ' + indent.join( reversed( lines ) )
+    if seen is None:
+      seen = [ None ] * len(TOKENS)
+    try:
+      index = seen.index( self )
+    except ValueError:
+      pass
+    else:
+      return '%{}'.format( index )
+    asciitree = str(self)
+    if core.getprop( 'richoutput', False ):
+      select = '├ ', '└ '
+      bridge = '│ ', '  '
+    else:
+      select = ': ', ': '
+      bridge = '| ', '  '
+    for iarg, arg in enumerate( self.__args ):
+      n = iarg >= len(self.__args) - 1
+      asciitree += '\n' + select[n] + ( ('\n' + bridge[n]).join( arg.asciitree( seen ).splitlines() ) if isinstance(arg,Evaluable) else '<{}>'.format(arg) )
+    index = len(seen)
+    seen.append( self )
+    return '%{} = {}'.format( index, asciitree )
 
   def __str__( self ):
     return self.__class__.__name__
@@ -1212,7 +1224,10 @@ class Multiply( ArrayFunc ):
 
   def evalf( self, arr1, arr2=None ):
     assert arr1.ndim == self.ndim+1
-    return arr1 * ( arr2 if arr2 is not None else self.funcs[1] )
+    if arr2 is None:
+      return arr1 * self.funcs[1]
+    assert arr2.ndim == self.ndim+1
+    return arr1 * arr2
 
   def _sum( self, axis ):
     func1, func2 = self.funcs
@@ -1743,6 +1758,18 @@ class Pointdata( ArrayFunc ):
 
     return Pointdata( data, self.shape )
 
+class Elemwise( ArrayFunc ):
+  'elementwise constant data'
+
+  def __init__( self, fmap, shape ):
+    self.fmap = fmap
+    ArrayFunc.__init__( self, args=[TRANS], shape=shape )
+
+  def evalf( self, transform ):
+    trans = transform[0].lookup( self.fmap )
+    value = numpy.asarray( self.fmap[trans] )
+    assert value.shape == self.shape
+    return value[_]
 
 class Eig( Evaluable ):
   'Eig'
@@ -2915,7 +2942,7 @@ def eig( arg, axes=(-2,-1), symmetric=False ):
 
   # When it's an array calculate directly
   if not _isfunc(aligned_arg):
-    eigval, eigvec = numeric.eigh( aligned_arg ) if symmetric else numeric.eig( aligned_arg )
+    eigval, eigvec = numpy.linalg.eigh( aligned_arg ) if symmetric else numpy.linalg.eig( aligned_arg )
   else:
     # Use _call to see if the object has its own _eig function
     ret = _call( aligned_arg, '_eig' )
@@ -3102,8 +3129,7 @@ def fdapprox( func, w, dofs, delta=1.e-5 ):
   step = numpy.linalg.norm( dofs, numpy.inf )*delta
   ndofs = len( dofs )
   dfunc_fd = []
-  __log__ = log.range( 'dof', ndofs )
-  for i in __log__:
+  for i in log.range( 'dof', ndofs ):
     pert = dofs.copy()
     pert[i] += step
     x1 = tuple( wi.dot( pert ) for wi in w )
