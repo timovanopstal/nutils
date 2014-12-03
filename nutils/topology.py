@@ -56,7 +56,7 @@ class Topology( object ):
             edges.pop( edgekey )
           except KeyError:
             edges[edgekey] = elem.edge(iedge)
-      self.__boundary = Topology( edges.values() )
+      self.__boundary = Topology( edges.values(), self.ndims-1 )
     return self.__boundary
 
   @property
