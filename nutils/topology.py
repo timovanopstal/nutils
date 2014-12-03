@@ -77,7 +77,7 @@ class Topology( object ):
     'add topologies'
 
     assert self.ndims == other.ndims
-    return Topology( set(self) | set(other) )
+    return Topology( set(self) | set(other), self.ndims )
 
   def __sub__( self, other ):
     'subtract topologies'
