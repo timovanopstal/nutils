@@ -429,6 +429,20 @@ class SparseMatrix( Matrix ):
 
     return x
 
+  def eigh( self, b=None, constrain=None ):
+    x, I, J = parsecons( constrain, None, None, self.shape )
+    matrix = self.toarray()[I][:,J]
+    if b: b = b.toarray()[I][:,J]
+    from scipy.linalg import eigh
+    val, vec = eigh( matrix, b=b )
+    def unconstrain( z ):
+      from numpy import array
+      y = array(x.tolist())
+      y[J] = z
+      return y
+    uvec = map( unconstrain, vec.T )
+    return val, uvec
+
 class DenseMatrix( Matrix ):
   'matrix wrapper class'
 
