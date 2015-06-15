@@ -68,9 +68,6 @@ class CompiledEvaluable( object ):
           retvals.append( self.eval( elem, base_ischeme%q ) )
           err = numeric.norm2((locate(retvals[-2])-locate(retvals[-1])).ravel())
           if err<TOL: break
-        f = open( 'tmp.txt', 'a' )
-        f.write( '%i '%q )
-        f.close()
         return retvals[-1]
       ischeme = ischeme[elem]
 
