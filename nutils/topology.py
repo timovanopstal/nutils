@@ -176,8 +176,8 @@ class Topology( object ):
       for ifunc, index, data in idata.eval( elem, ipoints, fcache ):
         retvals[ifunc][s+numpy.ix_(*[ ind for (ind,) in index ])] += numeric.dot(iweights,data) if geometry else data
 
-    log.debug( 'cache', fcache.stats )
-    log.info( 'created', ', '.join( '%s(%s)' % ( retval.__class__.__name__, ','.join( str(n) for n in retval.shape ) ) for retval in retvals ) )
+    # log.debug( 'cache', fcache.stats )
+    # log.info( 'created', ', '.join( '%s(%s)' % ( retval.__class__.__name__, ','.join( str(n) for n in retval.shape ) ) for retval in retvals ) )
 
     if asfunction:
       if geometry:
@@ -212,8 +212,8 @@ class Topology( object ):
     indexfunc = function.Tuple( indices )
     valuefunc = function.Tuple( values )
 
-    log.debug( 'integrating %s distinct blocks' % '+'.join(
-      str(block2func.count(ifunc)) for ifunc in range(len(funcs)) ) )
+    # log.debug( 'integrating %s distinct blocks' % '+'.join(
+    #   str(block2func.count(ifunc)) for ifunc in range(len(funcs)) ) )
 
     if core.getprop( 'dot', False ):
       valuefunc.graphviz()
@@ -271,7 +271,7 @@ class Topology( object ):
           index[idim,s].reshape(w_intdata.shape)[...] = ii[si]
           si = si[:-1]
 
-    log.debug( 'cache', fcache.stats )
+    # log.debug( 'cache', fcache.stats )
 
     return data_index
 
@@ -323,7 +323,7 @@ class Topology( object ):
   def project( self, fun, onto, geometry, tol=0, ischeme=None, droptol=1e-12, exact_boundaries=False, constrain=None, verify=None, ptype='lsqr', precon='diag', edit=_identity, **solverargs ):
     'L2 projection of function onto function space'
 
-    log.debug( 'projection type:', ptype )
+    # log.debug( 'projection type:', ptype )
 
     if isinstance( fun, IndexedArray ):
       fun = fun.unwrap( geometry )
@@ -415,7 +415,7 @@ class Topology( object ):
     info = 'constrained {}/{} dofs'.format( numcons, constrain.size )
     if avg_error is not None:
       info += ', error {:.2e}/area'.format( avg_error )
-    log.info( info )
+    # log.info( info )
     if verify is not None:
       assert numcons == verify, 'number of constraints does not meet expectation: %d != %d' % ( numcons, verify )
 
@@ -1182,7 +1182,7 @@ class StructuredTopology( Topology ):
       slices.append(slices_i)
 
     #Cache effectivity
-    log.debug( 'Local knot vector cache effectivity: %d' % (100*(1.-len(cache)/float(sum(self.shape)))) )
+    # log.debug( 'Local knot vector cache effectivity: %d' % (100*(1.-len(cache)/float(sum(self.shape)))) )
 
     dofmap = {}
     funcmap = {}
