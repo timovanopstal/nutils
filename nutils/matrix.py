@@ -107,7 +107,7 @@ class ScipyMatrix( Matrix ):
     return supp
 
   @log.title
-  def solve( self, rhs=None, constrain=None, lconstrain=None, rconstrain=None, tol=0, lhs0=None, solver=None, symmetric=False, title='solving system', callback=None, precon=None, info=False, **solverargs ):
+  def solve( self, rhs=None, constrain=None, lconstrain=None, rconstrain=None, tol=0, lhs0=None, solver=None, symmetric=False, title='solving system', callback=None, precon=None, info=False, logger=log.info, **solverargs ):
     'solve'
 
     import scipy.sparse.linalg
@@ -140,7 +140,7 @@ class ScipyMatrix( Matrix ):
 
     solverfun = getattr( scipy.sparse.linalg, solver )
     if solver == 'spsolve':
-      log.info( 'solving system using sparse direct solver' )
+      # log.info( 'solving system using sparse direct solver' )
       x = solverfun( A, b )
       solverinfo( A, b, x )
     else:
@@ -154,7 +154,7 @@ class ScipyMatrix( Matrix ):
       mycallback = solverinfo if solver != 'cg' else functools.partial( solverinfo, A, b )
       x, status = solverfun( A, b, M=precon, tol=tol, x0=x0, callback=mycallback, **solverargs )
       assert status == 0, '%s solver failed with status %d' % (solver, status)
-      log.info( '%s solver converged in %d iterations' % (solver.upper(), solverinfo.niter) )
+      logger( '%s solver converged in %d iterations' % (solver.upper(), solverinfo.niter) )
     lhs[J] = x
 
     return (lhs,solverinfo) if info else lhs
@@ -232,7 +232,7 @@ def assemble( data, index, shape, force_dense=False ):
     if retval.ndim == 2:
       retval = NumpyMatrix( retval )
   assert retval.shape == shape
-  log.debug( 'assembled', '%s(%s)' % ( retval.__class__.__name__, ','.join( str(n) for n in shape ) ) )
+  # log.debug( 'assembled', '%s(%s)' % ( retval.__class__.__name__, ','.join( str(n) for n in shape ) ) )
   return retval
 
 def parsecons( constrain, lconstrain, rconstrain, shape ):

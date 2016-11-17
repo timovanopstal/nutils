@@ -557,13 +557,13 @@ def run( *functions ):
     gitversion = version + '.' + githash(__file__,2)[:8]
   except:
     gitversion = version
-  log.info( 'nutils v%s\n' % gitversion )
+  log.user( 'nutils v%s\n' % gitversion )
 
   commandline = [ ' '.join([ scriptname, func.__name__ ]) ] + [ '  --%s=%s' % item for item in kwargs.items() ]
   ctime = time.ctime()
 
-  textlog.write( 'info', ' \\\n'.join( commandline ) + '\n' )
-  textlog.write( 'info', 'start %s\n' % ctime )
+  textlog.write( 'user', ' \\\n'.join( commandline ) + '\n' )
+  textlog.write( 'user', 'start %s\n' % ctime )
 
   htmlfile.write( '<span class="info">\n' )
   htmlfile.write( '{} {}\n'.format( scriptname, func.__name__ ) )
@@ -603,9 +603,9 @@ def run( *functions ):
   minutes = dt // 60 - 60 * hours
   seconds = dt // 1 - 60 * minutes - 3600 * hours
 
-  textlog.write( 'info', None )
-  textlog.write( 'info', 'finish %s' % time.ctime() )
-  textlog.write( 'info', 'elapsed %02.0f:%02.0f:%02.0f' % ( hours, minutes, seconds ) )
+  textlog.write( 'user', None )
+  textlog.write( 'user', 'finish %s' % time.ctime() )
+  textlog.write( 'user', 'elapsed %02.0f:%02.0f:%02.0f' % ( hours, minutes, seconds ) )
 
   htmlfile.write( '<span class="info">\n' )
   htmlfile.write( '\nfinish {}\nelapsed {:02.0f}:{:02.0f}:{:02.0f}\n\n'.format( time.ctime(), hours, minutes, seconds ) )
