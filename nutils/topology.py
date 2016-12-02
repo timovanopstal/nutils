@@ -198,7 +198,7 @@ class Topology( object ):
     retvals = self.elem_eval( (1,)+funcs, geometry=geometry, ischeme=ischeme )
     return [ v / retvals[0][(slice(None),)+(_,)*(v.ndim-1)] for v in retvals[1:] ]
 
-  def _integrate( self, funcs, ischeme, fcache=None ):
+  def _integrate( self, funcs, ischeme, fcache=None, pariter=True ):
 
     # Functions may consist of several blocks, such as originating from
     # chaining. Here we make a list of all blocks consisting of triplets of
@@ -257,7 +257,8 @@ class Topology( object ):
     # data_index is filled in the same loop. It does not use valuefunc data but
     # benefits from parallel speedup.
 
-    for ielem, elem in parallel.pariter( log.enumerate( 'elem', self ) ):
+    iterator = parallel.pariter if pariter else lambda x: x
+    for ielem, elem in iterator( log.enumerate( 'elem', self ) ):
       ipoints, iweights = fcache[elem.reference.getischeme]( ischeme[elem] if isinstance(ischeme,dict) else ischeme )
       assert iweights is not None, 'no integration weights found'
       for iblock, intdata in enumerate( valuefunc.eval( elem, ipoints, fcache ) ):
@@ -276,13 +277,13 @@ class Topology( object ):
 
   @log.title
   @core.single_or_multiple
-  def integrate( self, funcs, ischeme, geometry=None, force_dense=False, fcache=None, edit=_identity ):
+  def integrate( self, funcs, ischeme, geometry=None, force_dense=False, fcache=None, edit=_identity, pariter=True ):
     'integrate'
 
     iwscale = function.J( geometry, self.ndims ) if geometry else 1
     funcs = [ func.unwrap( geometry ) if isinstance( func, IndexedArray ) else func for func in funcs ]
     integrands = [ function.asarray( edit( func * iwscale ) ) for func in funcs ]
-    data_index = self._integrate( integrands, ischeme, fcache )
+    data_index = self._integrate( integrands, ischeme, fcache, pariter )
     return [ matrix.assemble( data, index, integrand.shape, force_dense ) for integrand, (data,index) in zip( integrands, data_index ) ]
 
   @log.title
