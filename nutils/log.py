@@ -264,6 +264,7 @@ class HtmlLog( HtmlInsertAnchor, ContextTreeLog ):
       self._file.__enter__()
     self._print( '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "DTD/xhtml1-strict.dtd">' )
     self._print( '<html><head>' )
+    self._print( '<meta http-equiv="Content-Type" content="text/html; charset=utf-8">' )
     self._print( '<title>{}</title>'.format( html.escape( self._title ) ) )
     self._print( '<script type="text/javascript" src="viewer.js" ></script>' )
     self._print( '<link rel="stylesheet" type="text/css" href="style.css">' )
