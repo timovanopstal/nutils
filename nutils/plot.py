@@ -809,7 +809,7 @@ def writevtu( name, topo, coords, pointdata={}, celldata={}, ascii=False, supere
 
     if celldata:  
       keys, values = zip( *celldata.items() )
-      arrays = topo.elem_mean( values, coords=coords, ischeme=ischeme )
+      arrays = topo.elem_mean( values, geometry=coords, ischeme=ischeme )
       for key, array in zip( keys, arrays ):
         vtkfile.celldataarray( key, array )
 
