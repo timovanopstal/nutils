@@ -2809,8 +2809,8 @@ _normdims = lambda ndim, shapes: tuple( numeric.normdim(ndim,sh) for sh in shape
 def _jointdtype( *dtypes ):
   'determine joint dtype'
 
-  type_order = bool, int, float
-  kind_order = 'bif'
+  type_order = bool, int, int, float
+  kind_order = 'biuf'
   itype = builtins.max( kind_order.index(dtype.kind) if isinstance(dtype,numpy.dtype)
            else type_order.index(dtype) for dtype in dtypes )
   return type_order[itype]
