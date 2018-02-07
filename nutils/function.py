@@ -3160,7 +3160,7 @@ def derivative(func, var, seen=None):
   assert isinstance(var, DerivativeTargetBase), 'invalid derivative target {!r}'.format(var)
   if seen is None:
     seen = {}
-  func = asarray(func)
+  func = asarray(func).simplified
   if func in seen:
     result = seen[func]
   else:
