@@ -371,8 +371,7 @@ def gmsh(fname, name=None):
     nodemap[int(words[0])] = i
     nodes[i] = [float(n) for n in words[1:]]
   assert not numpy.isnan(nodes).any()
-  if ndims==2:
-    assert numpy.all(nodes[:,2]) == 0, 'Non-zero z-coordinates found in 2D mesh.'
+  if numpy.all(nodes[:,2]) == 0:
     nodes = nodes[:,:2]
 
   # parse section Elements
@@ -401,9 +400,10 @@ def gmsh(fname, name=None):
 
   # check orientation
   vinodes = inodesbydim[ndims] # save for geom
-  elemnodes = nodes[vinodes] # nelems x ndims+1 x ndims
-  elemareas = numpy.linalg.det(elemnodes[:,1:ndims+1] - elemnodes[:,:1])
-  assert numpy.all(elemareas > 0)
+  if ndims==nodes.shape[1]:
+    elemnodes = nodes[vinodes] # nelems x ndims+1 x ndims
+    elemareas = numpy.linalg.det(elemnodes[:,1:ndims+1] - elemnodes[:,:1])
+    assert numpy.all(elemareas > 0)
 
   vetype = etypesbydim[ndims][0]
   assert all(etype==vetype for etype in etypesbydim[ndims]), 'all interior elements should be of the same element type'
